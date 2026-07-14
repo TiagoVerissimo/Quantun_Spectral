@@ -1,2 +1,18 @@
 __pycache__/
 *.pyc
+
+# LaTeX compilation auxiliary and output files
+*.aux
+*.log
+*.out
+*.toc
+*.bbl
+*.blg
+*.synctex.gz
+*.fdb_latexmk
+*.fls
+*.pdf
+
+# LaTeX source and bibliography files
+*.tex
+*.bib

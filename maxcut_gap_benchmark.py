@@ -469,7 +469,7 @@ def run_instance(inst_id, N, edges, s_grid, sector=True, krylov_m=40,
         ax.axhline(0.0, color="gray", lw=0.8)
         ax.set_xlabel("s"); ax.set_ylabel("gap / bound")
         ax.set_title(f"instance {inst_id}: N={N}, |E|={len(edges)}, dim={dim}")
-        ax.set_ylim(min(-0.5, 1.2 * min(psd.min(), horn.min())), 1.1 * gap.max())
+        ax.set_ylim(-0.2, 1.1 * gap.max())
         ax.legend(fontsize=8, ncol=2)
         fig.tight_layout()
         fig.savefig(os.path.join(outdir, f"instance_{inst_id}.png"), dpi=160)

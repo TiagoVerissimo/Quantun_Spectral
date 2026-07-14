@@ -45,6 +45,8 @@ means = {
     "wall_validation": []
 }
 stds = {
+    "solves_hybrid": [],
+    "solves_uniform": [],
     "wall": []
 }
 
@@ -52,8 +54,15 @@ for N in sorted_Ns:
     instances = data[N]
     num = len(instances)
     means["N"].append(N)
-    means["solves_hybrid"].append(sum(inst["solves_hybrid"] for inst in instances) / num)
-    means["solves_uniform"].append(sum(inst["solves_uniform"] for inst in instances) / num)
+    
+    hybrids = [inst["solves_hybrid"] for inst in instances]
+    uniforms = [inst["solves_uniform"] for inst in instances]
+    
+    means["solves_hybrid"].append(np.mean(hybrids))
+    stds["solves_hybrid"].append(np.std(hybrids))
+    means["solves_uniform"].append(np.mean(uniforms))
+    stds["solves_uniform"].append(np.std(uniforms))
+    
     means["frac_weyl"].append(sum(inst["frac_weyl"] for inst in instances) / num)
     means["frac_floor"].append(sum(inst["frac_floor"] for inst in instances) / num)
     means["frac_floor_poly"].append(sum(inst["frac_floor_poly"] for inst in instances) / num)
@@ -72,8 +81,8 @@ bar_width = 0.35
 r1 = np.arange(len(means["N"]))
 r2 = [x + bar_width for x in r1]
 
-plt.bar(r1, means["solves_hybrid"], color="#3a86c8", width=bar_width, edgecolor="grey", label="Hybrid Certified Sweep (Alg 1)")
-plt.bar(r2, means["solves_uniform"], color="#f25c54", width=bar_width, edgecolor="grey", label="Uniform Equal-Rigor Grid")
+plt.bar(r1, means["solves_hybrid"], yerr=stds["solves_hybrid"], capsize=5, color="#3a86c8", width=bar_width, edgecolor="grey", label="Hybrid Certified Sweep (Alg 1)")
+plt.bar(r2, means["solves_uniform"], yerr=stds["solves_uniform"], capsize=5, color="#f25c54", width=bar_width, edgecolor="grey", label="Uniform Equal-Rigor Grid")
 
 plt.xlabel("Qubits (N)", fontweight="bold", fontsize=11)
 plt.ylabel("Mean Matrix Solves (Oracle Calls)", fontweight="bold", fontsize=11)

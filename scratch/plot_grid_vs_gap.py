@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Add current workspace directory to sys.path
-sys.path.append(os.path.abspath("c:/Users/c4065577/Documents/Quantun_Spectral"))
+sys.path.append(os.path.abspath("."))
 
 from main import (
     PathOperator, er_graph, pinned_cost_vector, path_lipschitz, certified_sweep, lowest_two
@@ -86,11 +86,14 @@ def generate_grid_density_plot(N, seed=0, p=0.5, delta_target=0.25):
     plt.legend(fontsize=9, loc="upper right")
     plt.tight_layout()
     
-    out_path = f"results/grid_density_vs_gap_N{N}.png"
+    if N == 10:
+        out_path = "results/grid_density_vs_gap.png"
+    else:
+        out_path = f"results/grid_density_vs_gap_N{N}.png"
     plt.savefig(out_path, dpi=160)
     plt.close()
     print(f"Saved {out_path} successfully.")
 
 if __name__ == "__main__":
-    for N in [12, 14]:
+    for N in [10, 12, 14]:
         generate_grid_density_plot(N, seed=0)

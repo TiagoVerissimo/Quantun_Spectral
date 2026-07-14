@@ -56,3 +56,16 @@ Here is exactly which script you need to run for each graph:
 If you want all of these graphs, you will need to run those separate Python commands.
 
 - **To run the full benchmark suite** and generate new data for different instances, you can execute `maxcut_gap_benchmark.py`. This script provides a command-line interface; run `python maxcut_gap_benchmark.py -h` for available arguments (like `--scan-N` or `--full-space`).
+
+## Reproducibility & Dependency Pinning
+
+To ensure reproducible environments, this repository uses pinned dependency versions. All dependencies are listed in [requirements.txt](file:///c:/Users/c4065577/Documents/Bounding_Spectral_Gaps/requirements.txt) and can be installed via:
+```bash
+pip install -r requirements.txt
+```
+
+### Reference Figures & Seeds:
+* **`comparison_updated_N10_no_anchors.png` and `comparison_updated_N10_anchors.png`** (Figures 1 & 2): Evaluated on a random Erdős--Rényi Max-Cut instance with $N=10$, edge probability $p=0.5$, and random seed `seed=0`.
+* **`efficiency_comparison.png`, `certificate_coverage.png`, and `runtime_scaling.png`** (Figures 3, etc.): Averaged over an ensemble of $20$ random instances per qubit size $N \in \{10, 12, 14\}$ with seeds ranging from $0$ to $19$.
+* **`grid_density_vs_gap.png`** (and the companion $N=12, 14$ plots): Generated with $N \in \{10, 12, 14\}$ using `seed=0`.
+* **`horn_anchors_test.png`**: Evaluated on $N=8$ using `seed=42`.

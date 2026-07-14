@@ -63,11 +63,12 @@ def generate_graphs():
     print("Generating part 1 plot...")
     plt.figure(figsize=(8, 5))
     plt.plot(s_grid, gap, 'k-', lw=2.5, label=r"Exact Gap $\Delta(s)$")
-    plt.plot(s_grid, weyl_no_anchors, color='#3a86c8', linestyle="-", lw=1.8, label=f"Weyl Bound (Endpoints) [>0: {weyl_percent:.1f}%]")
-    plt.plot(s_grid, horn_no_anchors, color='#f25c54', linestyle="--", lw=1.8, label=f"Horn Bound (Endpoints) [>0: {horn_percent:.1f}%]")
+    plt.plot(s_grid, weyl_no_anchors, color='#3a86c8', linestyle="-", lw=1.8, label=f"Weyl Bound (Endpoints) [Certified Positive: {weyl_percent:.1f}% of path]")
+    plt.plot(s_grid, horn_no_anchors, color='#f25c54', linestyle="--", lw=1.8, label=f"Horn Bound (Endpoints) [Certified Positive: {horn_percent:.1f}% of path]")
     plt.axhline(0.0, color="#9ea1a5", lw=0.8, linestyle="-")
     plt.xlabel("Annealing Parameter (s)")
     plt.ylabel("Spectral Gap")
+    plt.ylim(-0.2, 1.25 * gap.max())  # Prevent stretching down to -25
     plt.title(f"Bounds Without Anchors (N={N}, Seed={seed})")
     plt.legend()
     plt.grid(True, linestyle=":", alpha=0.5)
@@ -115,7 +116,7 @@ def generate_graphs():
         ax.grid(True, linestyle=":", alpha=0.5)
         ax.legend(loc="upper right", fontsize=9)
         
-        ymin = min(w_b.min(), h_b.min(), -0.2)
+        ymin = -0.2  # Prevent stretching down to highly negative values
         ymax = gap.max() * 1.15
         ax.set_ylim(ymin, ymax)
         
