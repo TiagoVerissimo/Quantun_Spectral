@@ -26,18 +26,19 @@ def generate_grid_density_plot(N, seed=0, p=0.5, delta_target=0.25):
             break
             
     pathop = PathOperator(N, c)
-    L = path_lipschitz(pathop)
+    W = sum(edge[2] for edge in edges) if len(edges) > 0 and len(edges[0]) > 2 else float(len(edges))
+    L = float(W + N + 1)
     
     # 1. Run certified continuation sweep to get the hybrid anchors
-    records, windows = certified_sweep(pathop, L, delta_target)
+    records, windows, _ = certified_sweep(pathop, L)
     s_hybrid = np.array([r[0] for r in records])
     
-    # 2. Get uniform grid anchors of equal rigor
+    # 2. Get the archived uniform workload-reference anchors
     h_min = delta_target / (2 * L)
     n_uniform = int(np.ceil(1.0 / h_min)) + 1
     s_uniform = np.linspace(0.0, 1.0, n_uniform)
     
-    # 3. Compute true spectral gap along s
+    # 3. Compute a high-accuracy numerical reference gap along s
     sgrid = np.linspace(0.0, 1.0, 201)
     true_gaps = []
     for s in sgrid:
@@ -56,7 +57,7 @@ def generate_grid_density_plot(N, seed=0, p=0.5, delta_target=0.25):
     }
     
     # Plot true gap curve
-    plt.plot(sgrid, true_gaps, color=colors['true'], lw=2.5, label=r"True Spectral Gap $\Delta(s)$")
+    plt.plot(sgrid, true_gaps, color=colors['true'], lw=2.5, label=r"Numerical Reference Gap $\Delta(s)$")
     
     # Find the true gap values at the hybrid anchor points to plot them on the curve
     gap_hybrid = []
@@ -80,7 +81,7 @@ def generate_grid_density_plot(N, seed=0, p=0.5, delta_target=0.25):
     plt.axhline(0.0, color='gray', lw=0.8)
     plt.xlabel("Annealing Parameter (s)", fontweight="bold", fontsize=11)
     plt.ylabel("Spectral Gap", fontweight="bold", fontsize=11)
-    plt.title(f"Grid Solve Density vs. True Spectral Gap (N={N}, Instance Seed={seed})", fontsize=13, fontweight="bold", pad=15)
+    plt.title(f"Grid Solve Density vs. Numerical Reference Gap (N={N}, Instance Seed={seed})", fontsize=13, fontweight="bold", pad=15)
     plt.grid(True, linestyle=":", alpha=0.4)
     plt.ylim(-0.05 - 1.2 * rug_height, max(true_gaps) * 1.1)
     plt.legend(fontsize=9, loc="upper right")

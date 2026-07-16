@@ -12,7 +12,3 @@ __pycache__/
 *.fdb_latexmk
 *.fls
 *.pdf
-
-# LaTeX source and bibliography files
-*.tex
-*.bib

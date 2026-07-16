@@ -25,8 +25,7 @@ Paper certificates (rigorous lower bounds):
             certified positive (or a budget is reached).
   [PSD]     Componentwise-floor + Rayleigh-Ritz ceiling certificate
             (Prop. 5.6): needs only E1(H_I), E1(H_P), E0(H_I), <psi_I|H_P|psi_I>.
-  [Horn]    T^n_1 Horn spectral-profile certificate (Prop. 6.4), using the
-            full endpoint spectra (analytic for H_I, diagonal for H_P).
+
 
 Literature comparators (estimates, not certificates):
   [Krylov]  m-step Lanczos/Krylov subspace ("classical QKSD emulation",
@@ -187,11 +186,6 @@ def driver_matrix(N, sector=True):
                       shape=(dim, dim)).tocsr()
     return H + sp.identity(dim, format="csr") * (N / 2.0)
 
-def driver_spectrum(N, sector=True):
-    """Analytic spectrum of H_I: level k (k excitations), multiplicity C(N,k);
-    even sector keeps even k only."""
-    ks = range(0, N + 1, 2) if sector else range(0, N + 1)
-    return np.concatenate([np.full(math.comb(N, k), float(k)) for k in ks])
 
 def path_hamiltonian(s, HI, DP):
     return ((1.0 - s) * HI + s * sp.diags(DP)).tocsr()
@@ -210,6 +204,25 @@ def lowest_eigs(H, k=6, v0=None):
     idx = np.argsort(w)
     return w[idx], V[:, idx[0]]
 
+def lowest_two_with_residuals(H, v0=None, tol=EIGSH_TOL):
+    """Return two Ritz values, the ground Ritz vector, and residual norms."""
+    n = H.shape[0]
+    if n <= DENSE_CUTOFF:
+        w, V = np.linalg.eigh(H.toarray())
+        vals, vecs = w[:2], V[:, :2]
+    else:
+        vals, vecs = spla.eigsh(
+            H, k=2, which="SA", v0=v0, tol=tol, maxiter=10000,
+            ncv=min(n - 1, 50)
+        )
+        idx = np.argsort(vals)
+        vals, vecs = vals[idx], vecs[:, idx]
+    residuals = np.array([
+        np.linalg.norm(H @ vecs[:, j] - vals[j] * vecs[:, j])
+        for j in range(2)
+    ])
+    return vals, vecs[:, 0], residuals
+
 def exact_gap_curve(s_grid, HI, DP):
     E0, E1 = np.zeros_like(s_grid), np.zeros_like(s_grid)
     v0 = None
@@ -221,28 +234,13 @@ def exact_gap_curve(s_grid, HI, DP):
 # ----------------------------------------------------------------------
 # 4. Paper certificate 1: Weyl-Lipschitz propagation (Prop. 5.4 / Rem. 5.5)
 # ----------------------------------------------------------------------
-def weyl_lipschitz_constant(HI, DP, exact=True):
+def weyl_lipschitz_constant(n_v, W):
     """
-    L = || H_P - H_I ||_2 (in the working space).
-    exact=False returns the fully analytic bound ||H_P|| + ||H_I||
+    Certified analytical upper bound L >= ||H_P - H_I||_2.
+    Since H_I >= 0 with ||H_I||_2 = n_v, and H_P >= 0 with ||H_P||_2 = W,
+    the triangle inequality gives L = W + n_v.
     """
-    if not exact:
-        return float(np.max(DP) + np.max(driver_like_norm(HI)))
-    M = (sp.diags(DP) - HI).tocsr()
-    n = M.shape[0]
-    if n <= DENSE_CUTOFF:
-        w = np.linalg.eigvalsh(M.toarray())
-        return float(max(abs(w[0]), abs(w[-1])))
-    hi = spla.eigsh(M, k=1, which="LA", return_eigenvectors=False,
-                    tol=1e-8, maxiter=10000)[0]
-    lo = spla.eigsh(M, k=1, which="SA", return_eigenvectors=False,
-                    tol=1e-8, maxiter=10000)[0]
-    return float(max(abs(hi), abs(lo)))
-
-def driver_like_norm(HI):
-    n = HI.shape[0]
-    N = int(round(math.log2(n))) + 1
-    return np.array([N if N % 2 == 0 else N - 1], dtype=float)
+    return float(W + n_v)
 
 def weyl_envelope(s_grid, anchors, L):
     """Eq. (9): Delta(s) >= max_over_anchors { Delta(s0) - 2 L |s - s0| }."""
@@ -251,28 +249,67 @@ def weyl_envelope(s_grid, anchors, L):
         env = np.maximum(env, g0 - 2.0 * L * np.abs(s_grid - s0))
     return env
 
-def adaptive_weyl(s_grid, anchors, L, gap_oracle, max_anchors=25, min_gap_tol=1e-9):
-    """
-    Insert Lanczos-certified anchors at the argmin of the current envelope
-    until the envelope is positive everywhere or the budget is exhausted.
-    """
-    anchors = list(anchors)
+import scipy.linalg as la
+
+def adaptive_weyl(s_grid, endpoint_anchors, L_cert, HI, DP, solver_tol=1e-10, max_anchors=1000, eta=0.9, h_floor=1e-6):
+    s, v0 = 0.0, None
+    anchors = []
+    uncertified_windows = []
     calls = 0
-    while True:
-        env = weyl_envelope(s_grid, anchors, L)
-        j = int(np.argmin(env))
-        if env[j] > 0:
-            return env, anchors, True, calls
-        if len(anchors) >= max_anchors:
-            return env, anchors, False, calls
-        s_new = float(s_grid[j])
-        if any(abs(s_new - s0) < 1e-12 for s0, _ in anchors):
-            return env, anchors, False, calls        
-        g_new = gap_oracle(s_new)
+
+    while s < 1.0 - 1e-12 and calls < max_anchors:
         calls += 1
-        if g_new <= min_gap_tol:
-            return env, anchors, False, calls        
-        anchors.append((s_new, g_new))
+        H_s = path_hamiltonian(s, HI, DP)
+        w, v0, residuals = lowest_two_with_residuals(
+            H_s, v0=v0, tol=solver_tol
+        )
+        theta_0, theta_1 = w[0], w[1]
+
+        Delta_lo = max(0.0, theta_1 - residuals[1] - theta_0)
+        anchors.append((s, Delta_lo))
+
+        if Delta_lo > 0:
+            h = eta * Delta_lo / (2.0 * L_cert)
+        else:
+            h = 0.0
+
+        if h < h_floor:
+            h = h_floor
+            uncertified_windows.append((s, min(1.0, s + h)))
+
+        s = min(1.0, s + h)
+
+    reached_endpoint = s >= 1.0 - 1e-12
+    if not reached_endpoint:
+        # Keep the known exact endpoint datum in budgeted illustrations, but
+        # do not confuse it with completion of the continuation sweep.
+        uncertified_windows.append((anchors[-1][0], 1.0))
+        anchors.append((1.0, endpoint_anchors[1][1]))
+
+    env = weyl_envelope(s_grid, anchors, L_cert)
+    certified = reached_endpoint and len(uncertified_windows) == 0
+    return env, anchors, certified, calls, uncertified_windows
+
+def uniform_grid_sweep(HI, DP, L_cert, delta_target, s_grid, endpoint_anchors):
+    h_uniform = delta_target / (2.0 * L_cert)
+    n_uniform = int(math.ceil(1.0 / h_uniform)) + 1
+    s_anchors = np.linspace(0.0, 1.0, n_uniform)
+
+    anchor_gaps = []
+    v0 = None
+    for s in s_anchors:
+        H_s = path_hamiltonian(s, HI, DP)
+        w, v0, residuals = lowest_two_with_residuals(H_s, v0=v0)
+        anchor_gaps.append(float(max(0.0, w[1] - residuals[1] - w[0])))
+
+    env = np.full_like(s_grid, -np.inf)
+    for s0, glo in zip(s_anchors, anchor_gaps):
+        env = np.maximum(env, glo - 2.0 * L_cert * np.abs(s_grid - s0))
+
+    target_frac = float(np.mean(env >= delta_target))
+    pos_frac = float(np.mean(env > 0))
+    uncert_frac = float(np.mean(env <= 0))
+    return n_uniform, target_frac, pos_frac, uncert_frac
 
 # ----------------------------------------------------------------------
 # 5. Paper certificate 2: PSD componentwise floor (Prop. 5.6)
@@ -285,25 +322,6 @@ def psd_floor_curve(s_grid, E1_I, E1_P, E0_I, mean_P):
     s = s_grid
     return (np.maximum((1 - s) * E1_I, s * E1_P) - (1 - s) * E0_I - s * mean_P)
 
-# ----------------------------------------------------------------------
-# 6. Paper certificate 3: T^n_1 Horn spectral-profile bound (Prop. 6.4)
-# ----------------------------------------------------------------------
-def horn_t1_curve(s_grid, specI, specP):
-    """
-    Eq. (18) with A = (1-s) H_I, B = s H_P and spectra in NON-INCREASING order:
-       Delta >= max{a_n + b_{n-1}, a_{n-1} + b_n} - min_i {a_i + b_{n+1-i}}.
-    """
-    aI = np.sort(specI)[::-1].astype(float)
-    aP = np.sort(specP)[::-1].astype(float)
-    aP_rev = aP[::-1]                       
-    out = np.empty_like(s_grid)
-    for a, s in enumerate(s_grid):
-        A_last, A_last2 = (1 - s) * aI[-1], (1 - s) * aI[-2]
-        B_last, B_last2 = s * aP[-1], s * aP[-2]
-        L1 = max(A_last + B_last2, A_last2 + B_last)
-        U0 = np.min((1 - s) * aI + s * aP_rev)
-        out[a] = L1 - U0
-    return out
 
 # ----------------------------------------------------------------------
 # 7. Literature comparator A: truncated Krylov (classical QKSD emulation)
@@ -320,7 +338,7 @@ def lanczos_ritz(H, v0, m):
         w = H @ q - b * q_prev
         a = float(q @ w)
         w -= a * q
-        w -= Q[:j + 1].T @ (Q[:j + 1] @ w)   
+        w -= Q[:j + 1].T @ (Q[:j + 1] @ w)
         alph.append(a)
         b = float(np.linalg.norm(w))
         if b < 1e-13 or j == m - 1:
@@ -361,8 +379,8 @@ def two_level_model(s_grid, N, HI, DP, W):
     b_vec = np.zeros(n)
     b_vec[ground] = 1.0 / math.sqrt(g)
     Hbb_I = float(b_vec @ (HI @ b_vec))
-    sigma = math.sqrt(g / n)                       
-    Hub_P = sigma * E0P                            
+    sigma = math.sqrt(g / n)
+    Hub_P = sigma * E0P
     S = np.array([[1.0, sigma], [sigma, 1.0]])
     ew, ev = np.linalg.eigh(S)
     S_isqrt = ev @ np.diag(ew ** -0.5) @ ev.T
@@ -385,13 +403,14 @@ def run_instance(inst_id, N, edges, s_grid, sector=True, krylov_m=40,
     res = {"instance": inst_id, "N": N, "edges": len(edges),
            "sector": "even" if sector else "full"}
     W = sum(w for _, _, w in edges)
-    DP = anticut_diagonal(N, edges, sector)
-    HI = driver_matrix(N, sector)
-    specI = driver_spectrum(N, sector)
+    n_v = N + 1 if sector else N
+    DP = anticut_diagonal(n_v, edges, sector)
+    HI = driver_matrix(n_v, sector)
+
     dim = HI.shape[0]
     res["dim"] = dim
     res["maxcut"] = W - float(np.min(DP))
-    
+
     # ---------- Ground Truth ----------
     t0 = time.perf_counter()
     E0, E1 = exact_gap_curve(s_grid, HI, DP)
@@ -399,43 +418,61 @@ def run_instance(inst_id, N, edges, s_grid, sector=True, krylov_m=40,
     t_exact = time.perf_counter() - t0
     j_min = int(np.argmin(gap))
     res.update(true_dmin=float(gap[j_min]), true_smin=float(s_grid[j_min]), t_exact=t_exact)
-    
+
     DP_sorted = np.sort(DP)
-    gap_s1 = float(DP_sorted[1] - DP_sorted[0])   
-    E1_I = float(np.sort(specI)[1])               
-    gap_s0 = E1_I                                 
-    
+    gap_s1 = float(DP_sorted[1] - DP_sorted[0])
+    gap_s0 = 2.0 if sector else 1.0
+
     # ---------- [W-Lip] Weyl-Lipschitz ----------
     t0 = time.perf_counter()
-    L = weyl_lipschitz_constant(HI, DP, exact=True)
+    L = weyl_lipschitz_constant(n_v, W)
     endpoint_anchors = [(0.0, gap_s0), (1.0, gap_s1)]
-    env0 = weyl_envelope(s_grid, endpoint_anchors, L)   
+    env0 = weyl_envelope(s_grid, endpoint_anchors, L)
     t_weyl0 = time.perf_counter() - t0
-    
-    def oracle(s):
-        w, _ = lowest_eigs(path_hamiltonian(s, HI, DP), k=6)
-        return float(w[1] - w[0])
-        
+
     t0 = time.perf_counter()
-    envA, anchors, certified, n_calls = adaptive_weyl(
-        s_grid, endpoint_anchors, L, oracle, max_anchors=max_anchors)
+    envA, anchors, certified, n_calls, uncert_windows = adaptive_weyl(
+        s_grid, endpoint_anchors, L, HI, DP, max_anchors=max_anchors)
     t_weylA = time.perf_counter() - t0 + t_weyl0
+
+    w_target = 0.0
+    w_pos = 0.0
+    w_uncert = 0.0
+    for i in range(len(anchors)):
+        s_curr = anchors[i][0]
+        gap_lo = anchors[i][1]
+        if i < len(anchors) - 1:
+            h = anchors[i+1][0] - s_curr
+        else:
+            h = 1.0 - s_curr
+        is_uncert = any(abs(s_curr - w[0]) < 1e-12 for w in uncert_windows)
+        if is_uncert:
+            w_uncert += h
+        else:
+            interval_floor = gap_lo - 2.0 * L * h
+            if interval_floor >= 0.25:
+                w_target += h
+            else:
+                w_pos += h
+
+    n_uniform, uni_target_frac, uni_pos_frac, uni_uncert_frac = uniform_grid_sweep(HI, DP, L, 0.25, s_grid, endpoint_anchors)
+
     res.update(weyl_L=L, weyl0_min=float(env0.min()), weyl0_frac_pos=float(np.mean(env0 > 0)), t_weyl0=t_weyl0,
                weylA_min=float(envA.min()), weylA_certified=bool(certified), weylA_anchors=len(anchors),
-               weylA_oracle_calls=n_calls, t_weylA=t_weylA)
-    
+               weylA_oracle_calls=n_calls, t_weylA=t_weylA,
+               uncertified_windows=len(uncert_windows), total_window_width=w_uncert,
+               target_certified_frac=w_target, positive_certified_frac=w_target + w_pos,
+               uncertified_frac=w_uncert, uniform_solves=n_uniform,
+               uniform_target_frac=uni_target_frac, uniform_positive_frac=uni_pos_frac,
+               uniform_uncert_frac=uni_uncert_frac)
+
     # ---------- [PSD] Prop. 5.6 ----------
     t0 = time.perf_counter()
-    psd = psd_floor_curve(s_grid, E1_I=E1_I, E1_P=float(DP_sorted[1]), E0_I=0.0, mean_P=W / 2.0)
+    psd = psd_floor_curve(s_grid, E1_I=(2.0 if sector else 1.0), E1_P=float(DP_sorted[1]), E0_I=0.0, mean_P=W / 2.0)
     t_psd = time.perf_counter() - t0
     res.update(psd_min=float(psd.min()), psd_frac_pos=float(np.mean(psd > 0)), t_psd=t_psd)
-    
-    # ---------- [Horn] Prop. 6.4 ----------
-    t0 = time.perf_counter()
-    horn = horn_t1_curve(s_grid, specI, DP)
-    t_horn = time.perf_counter() - t0
-    res.update(horn_min=float(horn.min()), horn_frac_pos=float(np.mean(horn > 0)), t_horn=t_horn)
-    
+
+
     # ---------- [Krylov] ----------
     t0 = time.perf_counter()
     kry = krylov_gap_curve(s_grid, HI, DP, m=krylov_m, rng=rng)
@@ -444,16 +481,16 @@ def run_instance(inst_id, N, edges, s_grid, sector=True, krylov_m=40,
     res.update(krylov_dmin=float(kry[jk]), krylov_smin=float(s_grid[jk]),
                krylov_rel_err=float(abs(kry[jk] - gap[j_min]) / max(gap[j_min], 1e-15)),
                krylov_loc_err=float(abs(s_grid[jk] - s_grid[j_min])), t_krylov=t_kry)
-    
+
     # ---------- [2-level] ----------
     t0 = time.perf_counter()
-    tl, s_x = two_level_model(s_grid, N, HI, DP, W)
+    tl, s_x = two_level_model(s_grid, n_v, HI, DP, W)
     t_tl = time.perf_counter() - t0
     jt = int(np.argmin(tl))
     res.update(twolvl_dmin=float(tl[jt]), twolvl_smin=float(s_grid[jt]), twolvl_scross=float(s_x),
                twolvl_rel_err=float(abs(tl[jt] - gap[j_min]) / max(gap[j_min], 1e-15)),
                twolvl_loc_err=float(abs(s_grid[jt] - s_grid[j_min])), t_twolvl=t_tl)
-    
+
     # ---------- Visual Generation ----------
     if make_plot and outdir:
         fig, ax = plt.subplots(figsize=(8.5, 5.5))
@@ -461,7 +498,7 @@ def run_instance(inst_id, N, edges, s_grid, sector=True, krylov_m=40,
         ax.plot(s_grid, envA, "-", label=f"Weyl adaptive ({len(anchors)} anchors)")
         ax.plot(s_grid, env0, "--", label="Weyl endpoints only")
         ax.plot(s_grid, psd, "-.", label="PSD floor (Prop. 5.6)")
-        ax.plot(s_grid, horn, ":", label=r"$T_1^n$ Horn (Prop. 6.4)")
+
         ax.plot(s_grid, kry, ".", ms=3, alpha=0.6, label=f"Krylov m={krylov_m}")
         ax.plot(s_grid, tl, "-", alpha=0.6, label="two-level model")
         for (s0, g0) in anchors:
@@ -483,12 +520,11 @@ def summarize(rows, outdir):
         wcsv.writeheader()
         for r in rows:
             wcsv.writerow(r)
-            
+
     fig, ax = plt.subplots(figsize=(6.5, 6))
     truth = np.array([r["true_dmin"] for r in rows])
     for key, lab, mk in [("weylA_min", "Weyl adaptive", "o"), ("psd_min", "PSD floor", "s"),
-                         ("horn_min", "Horn $T_1^n$", "d"), ("krylov_dmin", "Krylov", "x"),
-                         ("twolvl_dmin", "two-level", "+")]:
+                         ("krylov_dmin", "Krylov", "x"), ("twolvl_dmin", "two-level", "+")]:
         vals = np.array([r[key] for r in rows])
         ax.plot(truth, vals, mk, label=lab, alpha=0.75)
     lim = [0, 1.15 * truth.max()]
@@ -502,7 +538,7 @@ def summarize(rows, outdir):
 
     fig, ax = plt.subplots(figsize=(7, 4.5))
     tkeys = [("t_exact", "exact grid"), ("t_weylA", "Weyl adaptive"), ("t_weyl0", "Weyl endpoints"),
-             ("t_psd", "PSD floor"), ("t_horn", "Horn"), ("t_krylov", "Krylov"), ("t_twolvl", "two-level")]
+             ("t_psd", "PSD floor"), ("t_krylov", "Krylov"), ("t_twolvl", "two-level")]
     means = [np.mean([r[k] for r in rows]) for k, _ in tkeys]
     ax.bar([lab for _, lab in tkeys], means)
     ax.set_yscale("log"); ax.set_ylabel("mean wall time [s]")
@@ -512,24 +548,17 @@ def summarize(rows, outdir):
     plt.close(fig)
 
 # ----------------------------------------------------------------------
-# 10. Self-test on the paper's worked examples (Sections 5.3, 5.4, 6.3)
+# 10. Self-test on the paper's Weyl and PSD examples
 # ----------------------------------------------------------------------
 def selftest():
     s = np.linspace(0, 1, 1001)
     weyl = 2.0 - 2.0 * math.sqrt(2.0) * s
-    assert np.isclose(weyl[500], 2 - math.sqrt(2), atol=1e-9)       
-    horn = horn_t1_curve(s, np.array([1.0, -1.0]), np.array([1.0, -1.0]))
-    assert np.allclose(horn, 2.0 * np.abs(1.0 - 2.0 * s), atol=1e-12)
+    assert np.isclose(weyl[500], 2 - math.sqrt(2), atol=1e-9)
+
     psd = psd_floor_curve(s, E1_I=2.0, E1_P=2.0, E0_I=0.0, mean_P=1.0)
     assert np.isclose(psd[500], 0.5, atol=1e-12)
-    
-    edges = [(0, 1, 1.0)]
-    DP = anticut_diagonal(2, edges, sector=True)
-    HI = driver_matrix(2, sector=True)
-    E0, E1 = exact_gap_curve(s, HI, DP)
-    horn2 = horn_t1_curve(s, driver_spectrum(2, True), DP)
-    assert np.all(horn2 <= (E1 - E0) + 1e-9)
-    print("self-test passed: reproduces Secs. 5.3 / 5.4 / 6.3 and sanity checks.")
+
+    print("self-test passed: reproduces the Weyl and PSD examples.")
 
 # ----------------------------------------------------------------------
 # 11. CLI Execution Entrypoint
@@ -565,13 +594,14 @@ def main():
         rows = []
         for N in Ns:
             rng = np.random.default_rng(master.integers(2**63))
-            edges = random_maxcut_instance(N, args.graph, args.p, not args.unweighted, rng)
+            n_v = N + 1 if sector else N
+            edges = random_maxcut_instance(n_v, args.graph, args.p, not args.unweighted, rng)
             print(f"[scan] N={N} ...")
             rows.append(run_instance(f"N{N}", N, edges, s_grid, sector, args.krylov_m, args.max_anchors, rng, args.outdir))
         summarize(rows, args.outdir)
-        
+
         fig, ax = plt.subplots(figsize=(7, 5))
-        for k, lab in [("t_exact", "exact grid"), ("t_weylA", "Weyl adaptive"), ("t_horn", "Horn"), ("t_krylov", "Krylov")]:
+        for k, lab in [("t_exact", "exact grid"), ("t_weylA", "Weyl adaptive"), ("t_krylov", "Krylov")]:
             ax.semilogy(Ns, [r[k] for r in rows], "o-", label=lab)
         ax.set_xlabel("N"); ax.set_ylabel("wall time [s]"); ax.legend()
         fig.tight_layout()
@@ -581,7 +611,8 @@ def main():
     rows = []
     for i in range(args.instances):
         rng = np.random.default_rng(master.integers(2**63))
-        edges = random_maxcut_instance(args.N, args.graph, args.p, not args.unweighted, rng)
+        n_v = args.N + 1 if sector else args.N
+        edges = random_maxcut_instance(n_v, args.graph, args.p, not args.unweighted, rng)
         print(f"instance {i}: N={args.N}, |E|={len(edges)} ...")
         r = run_instance(i, args.N, edges, s_grid, sector, args.krylov_m, args.max_anchors, rng, args.outdir)
         rows.append(r)

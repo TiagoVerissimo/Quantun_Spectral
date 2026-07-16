@@ -1,0 +1,976 @@
+\documentclass[11pt, a4paper]{article}
+\usepackage[a4paper, top=2.5cm, bottom=2.5cm, left=2cm, right=2cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{tgtermes}
+
+% --- UNIVERSAL PREAMBLE BLOCK ---
+\usepackage[english, provide=*]{babel}
+\babelprovide[import, onchar=ids fonts]{english}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{amsthm}
+\usepackage{booktabs}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\graphicspath{{results/}}
+\usepackage{enumitem}
+
+\setlist[itemize]{label=-}
+
+% Theorem Environments
+
+\newtheorem{theorem}{Theorem}[section]
+
+\newtheorem{lemma}[theorem]{Lemma}
+
+\newtheorem{proposition}[theorem]{Proposition}
+
+\newtheorem{definition}[theorem]{Definition}
+
+\newtheorem{remark}[theorem]{Remark}
+
+\newtheorem{corollary}[theorem]{Corollary}
+
+% Custom Command Definitions
+
+\newcommand{\hilb}{\mathcal{H}}
+
+\newcommand{\dd}{\mathrm{d}}
+
+\newcommand{\ee}{\mathrm{e}}
+
+\newcommand{\ii}{\mathrm{i}}
+
+\newcommand{\bra}[1]{\langle #1 |}
+
+\newcommand{\ket}[1]{| #1 \rangle}
+
+\newcommand{\bracket}[2]{\langle #1 | #2 \rangle}
+
+\newcommand{\opvalue}[3]{\langle #1 | #2 | #3 \rangle}
+
+\newcommand{\norm}[1]{\| #1 \|}
+
+\newcommand{\Tr}{\operatorname{Tr}}
+
+\newcommand{\Herm}{\operatorname{Herm}}
+
+\newcommand{\spec}{\operatorname{spec}}
+
+\usepackage[colorlinks=true, linkcolor=blue, citecolor=magenta, urlcolor=teal]{hyperref}
+
+\title{\textbf{A Numerical Realization of Matrix-Analysis Certificates for Adiabatic Spectral Gaps}}
+
+\author{
+  \textbf{Tiago Verissimo}\\
+  \small \textit{School of Mathematics, Statistics and Physics at Newcastle University} \\
+}
+\date{\small \today}
+
+\setcounter{secnumdepth}{2}
+\setcounter{tocdepth}{2}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Estimating whether the instantaneous spectral gap remains positive is a basic verification problem in adiabatic quantum computing. We present a constructive continuation framework that propagates local gap lower bounds across affine Hamiltonian paths using Weyl eigenvalue perturbation estimates. Given a certified upper bound on the perturbation norm and certified lower bounds at a finite collection of anchor points, the method partitions the adiabatic path into intervals on which strict gap positivity is guaranteed and unresolved windows requiring additional spectral information. The continuation theorem is rigorous conditional on certified anchor lower bounds; the present implementation uses high-accuracy sparse eigensolves and residual diagnostics, and should therefore be interpreted as a numerical realization of the formal framework rather than a fully interval-verified implementation. We also discuss complementary positive-semidefinite monotonicity. A reference implementation is evaluated on symmetry-reduced weighted Max-Cut Hamiltonians, illustrating the construction of interval certificates and the computational cost introduced by conservative norm bounds and narrow-gap regions. The aim is not to optimize the number of spectral evaluations, but to provide an explicit and auditable procedure for finite-size gap-positivity verification.
+\end{abstract}
+
+\tableofcontents
+
+\newpage
+
+\section{Introduction and Motivation}
+Adiabatic quantum computing (AQC) is governed by the adiabatic theorem of quantum mechanics, which offers a robust framework for solving hard combinatorial optimization problems as argued in \cite{farhi2000quantumcomputationadiabaticevolution}. The system is initialized in the known, easily prepared ground state of an initial driver Hamiltonian $H_I$. The system then evolves according to an interpolating, time-dependent Hamiltonian
+\begin{equation}
+H(s)=(1-s)H_I+sH_P, \qquad s\in[0,1],
+\end{equation}
+where $s=t/T$ is the normalized scheduling parameter, and $T$ is the total coherent runtime of the computation, as introduced in \cite{farhi2000quantumcomputationadiabaticevolution}.
+
+The standard adiabatic theorem states that to prevent transitions from the ground state $\ket{\psi_0(s)}$ to the first excited state $\ket{\psi_1(s)}$, the total evolution time $T$ must scale inversely with the square of the minimum instantaneous spectral gap:
+\begin{equation}
+\Delta_{\min}=\min_{s\in[0,1]}\Delta(s),
+\qquad
+\Delta(s)=E_1(s)-E_0(s),
+\end{equation}
+where $E_0(s)$ and $E_1(s)$ denote the two lowest eigenvalues of $H(s)$.
+
+The corresponding normalized instantaneous eigenstates are denoted by $\ket{\psi_0(s)}$ and $\ket{\psi_1(s)}$, respectively, so that
+\begin{equation}
+H(s)\ket{\psi_0(s)}=E_0(s)\ket{\psi_0(s)},
+\qquad
+H(s)\ket{\psi_1(s)}=E_1(s)\ket{\psi_1(s)}.
+\end{equation}
+Thus $\ket{\psi_0(s)}$ is the instantaneous ground state and $\ket{\psi_1(s)}$ is the instantaneous first excited state along the adiabatic path. Specifically, under standard smoothness assumptions, the runtime bound is typically expressed as
+\begin{equation}
+T \gg \frac{\max_s \left| \opvalue{\psi_1(s)}{\frac{\dd H(s)}{\dd s}}{\psi_0(s)} \right|}{\Delta_{\min}^2}.
+\end{equation}
+This is the standard scaling form used in \cite{farhi2000quantumcomputationadiabaticevolution}. Note that this ``folk'' adiabatic condition is heuristic and is generally insufficient to guarantee state tracking in all physical systems; see Section 2.2 for a discussion of more rigorous formulations.
+As the system size $N$ (the number of qubits) increases, \(\Delta_{\min}\) often decreases rapidly. In the presence of first-order quantum phase transitions (QPTs), \(\Delta_{\min}\) can become small, causing the required runtime $T$ to explode exponentially, rendering the computation inefficient as in \cite{smelyanskiy2002dynamicsquantumadiabaticevolution} and \cite{PhysRevResearch.5.043236}.
+
+Several studies have sought to mitigate $\Delta_{\min}$ by choosing alternative heuristic paths from $H_I$ to a fixed $H_P$ and studying how $\Delta_{\min}$ varies; examples of such approaches are described in \cite{PhysRevResearch.5.043236}, \cite{hnzj-j7kt}, and \cite{farhi2000quantumcomputationadiabaticevolution}.
+
+This paper develops a formal matrix-analysis framework, together with a high-accuracy numerical realization, for propagating lower bounds on the spectral gap. The implemented contribution is the Weyl-based positivity continuation method; the positive-semidefinite results are complementary analytical observations and do not alter the step selection in Algorithm~1.
+
+To identify what can and cannot be established from finitely many numerical evaluations, this paper introduces an adaptive continuation algorithm that partitions the path into positivity-certified and unresolved intervals. The central matrix-analysis tool is the norm-based Weyl perturbation certificate: a global, coarse-grained method based on the classical inequalities of Hermann Weyl. It requires no structural assumptions on the perturbation operator and compresses its effect into spectral-norm estimates, yielding robust but conservative control of eigenvalue drift and local gap fluctuations.
+
+
+\section{Related Work and Novelty}
+This paper positions itself at the intersection of classical matrix analysis and the physical engineering of adiabatic pathways. The literature driving this study can be categorized into three major streams:
+
+\subsection{Classical Spectral Stability and Subspace Rotations}
+The static behavior of eigenvalues under additive perturbations is governed by the regular perturbation theory of Kato \cite{Kato1966} and the spectral variation metrics surveyed by Bhatia \cite{Bhatia2007}. While Weyl's inequalities provide worst-case estimates on individual eigenvalues, they ignore eigenvector geometry. To address how state vectors track these moving energy levels, the numerical linear algebra community developed eigenspace stability bounds, most notably the Davis-Kahan $\sin\theta$ theorem \cite{DavisKahan1970} and its modern $\ell_\infty$ and small-gap refinements \cite{Fan2018, TranVu2022}. These eigenspace stability bounds are complementary to our eigenvalue-only certificates and could support future extensions to state-tracking certification.
+
+\subsection{Rigorous Adiabatic Theorems and Local Scheduling}
+The ``folk'' adiabatic condition requiring $T \propto \Delta^{-2}$ is often insufficient to guarantee high-fidelity state tracking in many-body systems. Rigorous adiabatic theorems developed by Jansen, Ruskai, and Seiler (JRS) \cite{JRS2007} establish dimension-independent timescales but require integrating complex derivatives of the Hamiltonian over the entire path. To optimize these runtimes, local adiabatic scheduling—such as the Roland-Cerf schedule $ds/dt \propto \Delta^2(s)$ \cite{RolandCerf2002}—aims to decelerate the system only in critical avoided-crossing regions. Our local gap propagation certificates can serve as inputs to these rigorous adiabatic analyses by providing interval-based analytical guarantees.
+
+In this context, Werner et al.\ \cite{PhysRevResearch.5.043236} estimate the location $s^*$ of a minimum gap from graph-theoretic information. Our complementary objective is to propagate local lower bounds and partition $[0,1]$ into intervals where strict positivity follows and intervals that remain unresolved.
+
+\subsection{Hamiltonian Engineering: Constraints and Catalysts}
+Mapping NP-hard optimization problems to physical hardware relies on Andrew Lucas's formulations of quadratic unconstrained binary optimization (QUBO) constraints \cite{Lucas2014}. To navigate first-order quantum phase transitions (QPTs) where the gap closes exponentially, researchers introduce transverse catalysts (both stoquastic and non-stoquastic) \cite{SekiNishimori2012, Albash2019, Crosson2020designing}. Furthermore, the formal framework of Spectral Gap Amplification (SGA) developed by Somma and Boixo \cite{SommaBoixo2013} provides a mechanism to quadratically open gaps. We apply positive-semidefinite (PSD) monotonicity to these models, clarifying what can be rigorously certified componentwise.
+
+\subsection{Verified Eigensolvers and Eigenvalue Enclosures}
+Verified numerical linear algebra can provide rigorous indexed eigenvalue enclosures using interval arithmetic, variational bounds, or verified inertia calculations \cite{Rump2010Acta,Temple1928,Kato1949,Lehmann1950}. Residual norms from an ordinary floating-point sparse solve instead provide existence information near Ritz values but do not, by themselves, identify eigenvalue indices. This distinction separates the Level 2 realization used here from a fully verified Level 3 implementation.
+
+The individual matrix inequalities used here are classical. The contribution of this paper is not to prove new spectral perturbation theorems, but to assemble them into an AQC-facing certification framework with explicit gap-propagation and monotonicity certificates.
+
+\section{Contributions}
+
+
+The main contribution of this paper is to turn spectral-gap estimation for AQC into a collection of finite-dimensional eigenvalue-certification problems. More precisely, the paper studies Hermitian paths of the form
+\begin{equation}
+H(s)=(1-s)H_I+sH_P,
+\qquad s\in[0,1],
+\end{equation}
+with ordered eigenvalues
+\begin{equation}
+E_0(s)\le E_1(s)\le \cdots \le E_{d-1}(s),
+\qquad
+\Delta(s)=E_1(s)-E_0(s),
+\end{equation}
+and derives sufficient conditions, expressed in terms of endpoint spectra, operator norms, and variational expectations, that certify lower bounds on \(\Delta(s)\). The specific mathematical contributions are as follows.
+
+\begin{enumerate}
+    \item \textbf{A Weyl-stability theorem for the AQC gap.} For arbitrary Hermitian endpoint Hamiltonians $H_I,H_P\in\Herm(d)$, the paper proves that every eigenvalue branch of the affine path is Lipschitz with constant $
+\norm{H_P-H_I}_2$:
+    \begin{equation}
+    |E_k(t)-E_k(s)|\le |t-s|\,
+\norm{H_P-H_I}_2,
+    \qquad k=0,\dots,d-1.
+    \end{equation}
+    As a direct consequence, the first gap satisfies
+    \begin{equation}
+    |\Delta(t)-\Delta(s)|\le 2|t-s|\,
+\norm{H_P-H_I}_2.
+    \end{equation}
+    Equivalently, a gap certificate at a single point $s_0$ propagates to the interval
+    \begin{equation}
+    \Delta(s)\ge \Delta(s_0)-2|s-s_0|\,
+\norm{H_P-H_I}_2,
+    \end{equation}
+    so the method gives an explicit neighbourhood on which the gap is certified positive whenever the right-hand side is positive.
+
+    \item \textbf{A positive-semidefinite energy-floor certificate.} Under the additional hypotheses
+    \begin{equation}
+    H_I\ge 0,
+    \qquad
+    H_P\ge 0,
+    \end{equation}
+    the paper applies Weyl monotonicity twice to prove the componentwise bound
+    \begin{equation}
+    E_k(s)
+    \ge
+    \max\{(1-s)E_k(H_I),\,sE_k(H_P)\},
+    \qquad k=0,
+    \dots,d-1.
+    \end{equation}
+    Combining the $k=1$ instance with the Rayleigh--Ritz upper bound obtained from a ground state $\ket{\psi_I}$ of $H_I$ yields the explicit gap certificate
+    \begin{equation}
+    \Delta(s)
+    \ge
+    \max\{(1-s)E_1(H_I),\,sE_1(H_P)\}
+    -(1-s)E_0(H_I)-s\opvalue{\psi_I}{H_P}{\psi_I}.
+    \end{equation}
+    Hence the paper gives a checkable sufficient condition for an open gap: the right-hand side must remain strictly positive on the parameter interval.
+
+    \item \textbf{Monotonicity theorems for catalysts and constraint penalties.} For a catalyzed path
+    \begin{equation}
+    H_{\mathrm{cat}}(s)=H(s)+f(s)H_C,
+    \qquad f(s)\ge 0,
+    \qquad H_C\ge 0,
+    \end{equation}
+    the paper proves the indexed eigenvalue inequality
+    \begin{equation}
+    E_k^{\mathrm{cat}}(s)\ge E_k(s),
+    \qquad k=0,\dots,d-1.
+    \end{equation}
+    For a constrained problem Hamiltonian
+    \begin{equation}
+    H_P=H_{\mathrm{cost}}+\gamma H_{\mathrm{constraints}},
+    \qquad \gamma>0,
+    \qquad H_{\mathrm{constraints}}\ge 0,
+    \end{equation}
+    and the corresponding unconstrained path $H_{\mathrm{unc}}(s)=(1-s)H_I+sH_{\mathrm{cost}}$, it proves
+    \begin{equation}
+    \lambda_k(H(s))\ge \lambda_k(H_{\mathrm{unc}}(s)),
+    \qquad k=0,\dots,d-1.
+    \end{equation}
+    These are precise index-by-index comparison theorems: positive-semidefinite catalysts and penalties cannot lower any ordered energy level, but the paper also notes that these monotonicity statements alone do not imply $\Delta_{\mathrm{cat}}(s)\ge\Delta(s)$ or gap amplification.
+
+\end{enumerate}
+
+Taken together, these contributions show how Weyl estimates and positive-semidefinite monotonicity provide complementary analytic tools for Hamiltonian design in AQC. The framework is useful not only for bounding a fixed path, but also for comparing candidate interpolations, catalysts, and penalty terms when setting up optimization problems for gap verification.
+
+\section{Mathematical Preliminaries}
+
+This section fixes the notation used throughout the paper. The basic definitions are standard in quantum information theory; for further background, see \cite{Nielsen_Chuang_2010} and \cite{Watrous_2018}. Let $\hilb \cong \mathbb{C}^{2^N}$ denote the finite-dimensional Hilbert space representing $N$ qubits.
+\begin{definition}[Hermitian Operators]
+An operator $H: \hilb \to \hilb$ is self-adjoint (Hermitian) if $H = H^\dagger$. We denote the set of $d \times d$ Hermitian matrices as $\Herm(d)$, where $d = 2^N$.
+\end{definition}
+
+By the spectral theorem, as presented in \cite{Watrous_2018}, any $H \in \Herm(d)$ possesses a complete orthonormal eigenbasis with real eigenvalues. Throughout the paper, generic matrix eigenvalues are indexed from $1$ to $d$ and ordered as
+\begin{equation}
+\lambda_1(H)\le \lambda_2(H)\le \cdots \le \lambda_d(H),
+\qquad
+\spec(H)=\{\lambda_1(H),\lambda_2(H),\dots,\lambda_d(H)\}.
+\end{equation}
+
+\begin{definition}[Spectral Norm]
+The spectral norm (or operator norm) of an operator $A$ on $\hilb$, denoted $
+\norm{A}_2$, is its largest singular value:
+\begin{equation}
+\norm{A}_2 \equiv \sup_{\ket{\phi} \neq 0} \frac{\norm{A\ket{\phi}}}{\norm{\ket{\phi}}}
+\end{equation}
+\end{definition}
+
+\begin{remark}
+If $A$ is Hermitian, then the spectral theorem gives an orthonormal eigenbasis $\{\ket{u_j}\}_{j=1}^d$ with $A\ket{u_j}=\lambda_j(A)\ket{u_j}$. Any normalized vector can be written as $\ket{\phi}=\sum_j c_j\ket{u_j}$ with $\sum_j |c_j|^2=1$. Hence
+\begin{equation}
+\norm{A\ket{\phi}}^2 = \sum_{j=1}^d |c_j|^2 |\lambda_j(A)|^2 \le \left(\max_{1\le j\le d}|\lambda_j(A)|^2\right)\sum_{j=1}^d |c_j|^2,
+\end{equation}
+so $
+\norm{A\ket{\phi}}\le \max_j |\lambda_j(A)|$ for every normalized $\ket{\phi}$. Equality is achieved by choosing $\ket{\phi}$ to be an eigenvector whose eigenvalue has maximal absolute value. Therefore
+\begin{equation}
+\norm{A}_2 = \max_{1\le j\le d} |\lambda_j(A)|.
+\end{equation}
+Since the eigenvalues are sorted in non-decreasing order and $|x|$ is largest at one of the endpoints of an interval, this becomes
+\begin{equation}
+\norm{A}_2 = \max \{|\lambda_1(A)|, |\lambda_d(A)|\}.
+\end{equation}
+\end{remark}
+
+The underlying mathematical machinery driving both variational ceilings and Weyl-type stability bounds is the Courant--Fischer minimax theorem \cite{Bhatia2007}. For any self-adjoint operator $H \in \Herm(d)$ with ordered eigenvalues $\lambda_1 \le \lambda_2 \le \dots \le \lambda_d$, the theorem provides a variational characterization of the entire spectrum:
+
+\begin{equation}
+\label{eq:courant-fischer}
+\lambda_k(H) = \min_{\dim V = k} \, \max_{|f\rangle \in V \setminus \{0\}} \frac{\langle f | H | f \rangle}{\langle f | f \rangle} = \max_{\dim W = d-k+1} \, \min_{|f\rangle \in W \setminus \{0\}} \frac{\langle f | H | f \rangle}{\langle f | f \rangle}
+\end{equation}
+
+This variational foundation also underpins modern Quantum Subspace Diagonalization (QSD) and quantum Krylov methods \cite{Parrish2019, Stair2020}.
+
+In AQC, the interpolating Hamiltonian $H(s)$ is a continuous curve in $\Herm(d)$. To emphasize the ground state, instantaneous energy levels are indexed from $0$ to $d-1$:
+\begin{equation}
+H(s)\ket{\psi_k(s)}=E_k(s)\ket{\psi_k(s)},
+\qquad
+E_0(s)\le E_1(s)\le \cdots \le E_{d-1}(s).
+\end{equation}
+The gap function is $\Delta(s)=E_1(s)-E_0(s)$. Thus $E_k(s)$ corresponds to $\lambda_{k+1}(H(s))$ under the generic matrix-indexing convention.
+
+\section{Lower Bounding Gaps via the Norm-Based Weyl Stability Certificate}
+
+The first approach uses a fundamental theorem of matrix analysis due to Hermann Weyl, which bounds the eigenvalues of a perturbed Hermitian matrix without requiring the eigenvectors of the perturbation.
+
+\subsection{Weyl's Perturbation Theorem}
+\begin{theorem}[Weyl's Inequality]
+\label{thm:weyl}
+Let $A, B \in \Herm(d)$ be two Hermitian matrices, and let $C = A + B$. Let the eigenvalues of $A, B,$ and $C$ be sorted in non-decreasing order:
+\begin{equation}
+\lambda_k(A), \quad \lambda_k(B), \quad \lambda_k(C) \quad \text{for } k=1,\dots,d
+\end{equation}
+Then, for every $k \in \{1, \dots, d\}$, the following inequality holds:
+\begin{equation}
+\lambda_k(A) + \lambda_1(B) \le \lambda_k(A + B) \le \lambda_k(A) + \lambda_d(B)
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+See Bhatia \cite{Bhatia2007} for a proof of the standard Weyl inequalities using variational eigenvalue characterizations.
+\end{proof}
+
+An immediate and powerful corollary of Weyl's Inequality relates the spectral norm of the perturbation to the maximum possible shift in any eigenvalue.
+
+\begin{corollary}[Eigenvalue Stability]
+\label{cor:eigenvalue-stability}
+Let $A, B \in \Herm(d)$. Then
+\begin{equation}
+|\lambda_k(A + B) - \lambda_k(A)| \le
+\norm{B}_2, \quad \forall k \in \{1, \dots, d\}
+\end{equation}
+\end{corollary}
+\begin{proof}
+Because $B$ is Hermitian, all of its eigenvalues are real and its spectral norm is the largest absolute value among them:
+\begin{equation}
+\norm{B}_2 = \max_{1\le j\le d} |\lambda_j(B)|.
+\end{equation}
+Therefore every eigenvalue of $B$ lies in the interval $[-
+\norm{B}_2,
+\norm{B}_2]$. In particular, the smallest eigenvalue satisfies $\lambda_1(B) \ge -
+\norm{B}_2$, and the largest eigenvalue satisfies $\lambda_d(B) \le
+\norm{B}_2$. Applying Weyl's Inequality gives
+\begin{equation}
+\lambda_k(A) + \lambda_1(B) \le \lambda_k(A+B) \le \lambda_k(A) + \lambda_d(B).
+\end{equation}
+Replacing $\lambda_1(B)$ by the weaker lower bound $-
+\norm{B}_2$ and $\lambda_d(B)$ by the weaker upper bound $
+\norm{B}_2$ yields
+\begin{equation}
+\lambda_k(A) -
+\norm{B}_2 \le \lambda_k(A+B) \le \lambda_k(A) +
+\norm{B}_2.
+\end{equation}
+Subtracting \(\lambda_k(A)\) throughout gives
+\begin{equation}
+-
+\norm{B}_2 \le \lambda_k(A+B)-\lambda_k(A) \le
+\norm{B}_2,
+\end{equation}
+which is equivalent to $|\lambda_k(A+B)-\lambda_k(A)|\le
+\norm{B}_2$.
+\end{proof}
+
+\begin{corollary}[Positive-Semidefinite Monotonicity]
+\label{cor:psd-monotonicity}
+Let $A, B \in M_n$ be Hermitian. Assume that $B$ is positive-semidefinite and that the eigenvalues of $A$ and $A+B$ are arranged in non-decreasing order. Then
+\begin{equation}
+\lambda_k(A)\le \lambda_k(A+B)\quad\text{for all } k=1,2,\ldots,n
+\end{equation}
+\end{corollary}
+
+\begin{proof}
+  Since $B\ge 0$, its smallest eigenvalue satisfies $\lambda_1(B)\ge 0$. The result follows by applying Theorem~\ref{thm:weyl}.
+\end{proof}
+
+
+\subsection{Application to AQC: Bounding Local Gap Fluctuations with Weyl's Inequality}
+
+\begin{proposition}[Lipschitz Bound for the Adiabatic Gap]
+\label{prop:lipschitz-gap}
+Let
+\begin{equation}
+H(s)=(1-s)H_I+sH_P,
+\qquad s\in[0,1],
+\end{equation}
+be an affine adiabatic path of Hermitian Hamiltonians. For each $s$, write the ordered eigenvalues of $H(s)$ as
+\begin{equation}
+E_0(s)\le E_1(s)\le \cdots \le E_{d-1}(s),
+\end{equation}
+and define the first spectral gap by
+\begin{equation}
+\Delta(s)=E_1(s)-E_0(s).
+\end{equation}
+Then, for every $s,t\in[0,1]$,
+\begin{equation}
+\label{eq:lipschitz-gap}
+|\Delta(t)-\Delta(s)|\le 2|t-s|\,
+\norm{H_P-H_I}_2.
+\end{equation}
+Equivalently, for $t=s+\delta s$ with $s+\delta s\in[0,1]$,
+\begin{equation}
+|\Delta(s+\delta s)-\Delta(s)|\le 2|\delta s|\,
+\norm{H_P-H_I}_2.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+Let $s,t\in[0,1]$. Since the path is affine,
+\begin{equation}
+H(t)-H(s)=(t-s)(H_P-H_I).
+\end{equation}
+Set
+\begin{equation}
+V_{s,t}:=H(t)-H(s).
+\end{equation}
+Then $V_{s,t}$ is Hermitian and
+\begin{equation}
+\norm{V_{s,t}}_2=|t-s|\,\norm{H_P-H_I}_2.
+\end{equation}
+Applying the eigenvalue-stability corollary to the pair $A=H(s)$ and $B=V_{s,t}$ gives, for every eigenvalue index $k$,
+\begin{equation}
+|E_k(t)-E_k(s)|\le |t-s|\,
+\norm{H_P-H_I}_2.
+\end{equation}
+In particular, for $k=0$ and $k=1$, we obtain the one-sided estimates
+\begin{equation}
+E_0(t)\le E_0(s)+|t-s|\,
+\norm{H_P-H_I}_2
+\end{equation}
+and
+\begin{equation}
+E_1(t)\ge E_1(s)-|t-s|\,
+\norm{H_P-H_I}_2.
+\end{equation}
+Subtracting these inequalities yields
+\begin{align}
+\Delta(t)&=E_1(t)-E_0(t) \\
+&\ge \bigl(E_1(s)-|t-s|\,
+\norm{H_P-H_I}_2\bigr)
+      -\bigl(E_0(s)+|t-s|\,
+\norm{H_P-H_I}_2\bigr) \\
+&=\Delta(s)-2|t-s|\,
+\norm{H_P-H_I}_2.
+\end{align}
+Thus the gap cannot decrease faster than linearly, with slope controlled by $2
+\norm{H_P-H_I}_2$.
+
+Interchanging the roles of $s$ and $t$ in the same argument gives
+\begin{equation}
+\Delta(s)\ge \Delta(t)-2|t-s|\,
+\norm{H_P-H_I}_2,
+\end{equation}
+which is equivalent to
+\begin{equation}
+\Delta(t)\le \Delta(s)+2|t-s|\,
+\norm{H_P-H_I}_2.
+\end{equation}
+Combining the lower and upper estimates gives
+\begin{equation}
+|\Delta(t)-\Delta(s)|\le 2|t-s|\,
+\norm{H_P-H_I}_2.
+\end{equation}
+Finally, setting $t=s+\delta s$ gives the equivalent local form
+\begin{equation}
+|\Delta(s+\delta s)-\Delta(s)|\le 2|\delta s|\,
+\norm{H_P-H_I}_2,
+\end{equation}
+whenever $s+\delta s\in[0,1]$.
+\end{proof}
+
+\begin{remark}
+The bound in Eq.~\eqref{eq:lipschitz-gap} represents a rigorous \textit{worst-case bound}. It guarantees that the spectral gap is a Lipschitz-continuous function of the path parameter $s$, with a Lipschitz constant bounded by $2
+\norm{H_P - H_I}_2$.
+
+Suppose that at a reference point $s_0\in[0,1]$ we have a rigorously certified gap
+ \begin{equation}
+\Delta(s_0)=\epsilon>0.
+\end{equation}
+Applying the Lipschitz estimate with $t=s$ and $s=s_0$ gives
+\begin{equation}
+\Delta(s)\ge \Delta(s_0)-2|s-s_0|\,
+\norm{H_P-H_I}_2
+=\epsilon-2|s-s_0|\,
+\norm{H_P-H_I}_2.
+\end{equation}
+Therefore the gap is guaranteed to remain strictly positive whenever
+\begin{equation}
+|s-s_0|<\frac{\epsilon}{2
+\norm{H_P-H_I}_2}.
+\end{equation}
+\end{remark}
+
+
+\begin{proposition}[Componentwise Floors and a Certified Gap Bound]
+\label{prop:componentwise-floors}
+Assume that the initial and problem Hamiltonians are positive-semidefinite,
+\begin{equation}
+H_I\ge 0,
+\qquad
+H_P\ge 0,
+\end{equation}
+and consider the affine adiabatic path
+\begin{equation}
+H(s)=(1-s)H_I+sH_P,
+\qquad s\in[0,1].
+\end{equation}
+Let the eigenvalues of $H(s)$ be written as
+\begin{equation}
+E_0(s)\le E_1(s)\le \cdots \le E_{d-1}(s),
+\end{equation}
+and write the eigenvalues of $H_I$ and $H_P$ in the same non-decreasing order. Then, for every $k=0,\dots,d-1$,
+\begin{equation}
+\label{eq:componentwise-floor}
+E_k(s)
+\ge
+\max\{(1-s)E_k(H_I),\,sE_k(H_P)\}.
+\end{equation}
+Moreover, if $\ket{\psi_I}$ is a normalized ground state of $H_I$, then the first spectral gap satisfies the certified lower bound
+\begin{equation}
+\label{eq:certified-gap-bound}
+\Delta(s)
+\ge
+\max\{(1-s)E_1(H_I),\,sE_1(H_P)\}
+-(1-s)E_0(H_I)-s\opvalue{\psi_I}{H_P}{\psi_I}.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+Fix $s\in[0,1]$. Since $H_P\ge 0$, the operator $sH_P$ is positive-semidefinite. We may therefore apply the positive-semidefinite monotonicity corollary to
+\begin{equation}
+A=(1-s)H_I,
+\qquad
+B=sH_P.
+\end{equation}
+This gives, for every eigenvalue index $k$,
+\begin{equation}
+E_k(s)=E_k(A+B)
+\ge E_k(A).
+\end{equation}
+Because $1-s\ge 0$, scaling the Hamiltonian $H_I$ by $1-s$ scales all of its eigenvalues by $1-s$. Hence
+\begin{equation}
+E_k(s)
+\ge
+(1-s)E_k(H_I).
+\end{equation}
+Similarly, since $(1-s)H_I$ is positive-semidefinite, we can instead write
+\begin{equation}
+A=sH_P,
+\qquad
+B=(1-s)H_I.
+\end{equation}
+Applying the same corollary gives
+\begin{equation}
+E_k(s)=E_k(A+B)
+\ge E_k(A)=sE_k(H_P).
+\end{equation}
+Combining the two lower bounds yields
+\begin{equation}
+E_k(s)
+\ge
+\max\{(1-s)E_k(H_I),\,sE_k(H_P)\}.
+\end{equation}
+This proves the componentwise eigenvalue floor.
+
+To obtain a lower bound on the spectral gap, we combine a lower bound on $E_1(s)$ with an upper bound on $E_0(s)$. Taking $k=1$ in the componentwise estimate gives
+\begin{equation}
+E_1(s)
+\ge
+\max\{(1-s)E_1(H_I),\,sE_1(H_P)\}.
+\end{equation}
+On the other hand, the variational principle gives, for any normalized trial state $\ket{\psi}$,
+\begin{equation}
+E_0(s)\le \opvalue{\psi}{H(s)}{\psi}.
+\end{equation}
+Choosing $\ket{\psi}=\ket{\psi_I}$, where $\ket{\psi_I}$ is a ground state of $H_I$, gives
+\begin{align}
+E_0(s)
+&\le \opvalue{\psi_I}{(1-s)H_I+sH_P}{\psi_I}\\
+&=(1-s)E_0(H_I)+s\opvalue{\psi_I}{H_P}{\psi_I}.
+\end{align}
+Therefore
+\begin{align}
+\Delta(s)&=E_1(s)-E_0(s)\\
+&\ge
+\max\{(1-s)E_1(H_I),\,sE_1(H_P)\}
+-(1-s)E_0(H_I)-s\opvalue{\psi_I}{H_P}{\psi_I}.
+\end{align}
+This is the claimed certified lower bound.
+\end{proof}
+
+
+\begin{proposition}[Positive-Semidefinite Catalysts Raise Energy Levels]
+\label{prop:psd-catalysts}
+Consider a catalyst-assisted adiabatic path of the form
+\begin{equation}
+H_{\mathrm{cat}}(s)=H(s)+f(s)H_C,
+\qquad
+H(s)=(1-s)H_I+sH_P,
+\end{equation}
+where $H_C$ is Hermitian and $f(s)$ is a real-valued scheduling function. Assume that
+\begin{equation}
+H_C\ge 0,
+\qquad
+f(s)\ge 0
+\qquad
+\text{for all }s\in[0,1].
+\end{equation}
+Let
+\begin{equation}
+E_k(s)=\lambda_k(H(s)),
+\qquad
+E_k^{\mathrm{cat}}(s)=\lambda_k(H_{\mathrm{cat}}(s)),
+\end{equation}
+with eigenvalues arranged in non-decreasing order. Then, for every $k=0,\dots,d-1$ and every $s\in[0,1]$,
+\begin{equation}
+E_k^{\mathrm{cat}}(s)\ge E_k(s).
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+Fix $s\in[0,1]$. Setting $A=H(s)$ and $B=f(s)H_C$, we see that $A$ is Hermitian, and since $H_C\ge 0$ and $f(s)\ge 0$, $B$ is positive-semidefinite. Applying Corollary~\ref{cor:psd-monotonicity} yields $\lambda_k(H(s))\le \lambda_k(H(s)+f(s)H_C)$, which directly proves that $E_k^{\mathrm{cat}}(s)\ge E_k(s)$ for all $k=0,\dots,d-1$.
+\end{proof}
+
+
+\begin{proposition}[Constraint Penalties Raise the AQC Energy Levels]
+\label{prop:constraint-penalties}
+Consider a constrained-optimization adiabatic path
+\begin{equation}
+H(s)=(1-s)H_I+sH_P,
+\qquad s\in[0,1],
+\end{equation}
+where the problem Hamiltonian decomposes as
+\begin{equation}
+H_P=H_{\mathrm{cost}}+\gamma H_{\mathrm{constraints}},
+\qquad \gamma>0.
+\end{equation}
+Assume that $H_I$, $H_{\mathrm{cost}}$, and $H_{\mathrm{constraints}}$ are Hermitian and that
+\begin{equation}
+H_{\mathrm{constraints}}\ge 0.
+\end{equation}
+Define the unconstrained adiabatic path
+\begin{equation}
+H_{\mathrm{unc}}(s)=(1-s)H_I+sH_{\mathrm{cost}}.
+\end{equation}
+Then, with eigenvalues arranged in non-decreasing order, for every $k=0,\dots,d-1$ and every $s\in[0,1]$,
+\begin{equation}
+E_k(s)\ge E_k^{\mathrm{unc}}(s).
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+Fix $s\in[0,1]$. Setting $A=(1-s)H_I+sH_{\mathrm{cost}}=H_{\mathrm{unc}}(s)$ and $B=s\gamma H_{\mathrm{constraints}}$, we have $A$ Hermitian and $B\ge 0$ (since $H_{\mathrm{constraints}}\ge 0$, $s\ge 0$, and $\gamma>0$). Applying Corollary~\ref{cor:psd-monotonicity} yields $\lambda_k(H_{\mathrm{unc}}(s))\le \lambda_k(H_{\mathrm{unc}}(s)+B)=\lambda_k(H(s))$, so $E_k(s)\ge E_k^{\mathrm{unc}}(s)$ for all $k=0,\dots,d-1$.
+\end{proof}
+
+\section{Computational Results}
+
+In this section, we empirically demonstrate the Weyl--Lipschitz continuation framework on finite-size Max-Cut instances of Erd\H{o}s--R\'{e}nyi graphs $G(n,p=0.5)$, where $n$ is the number of vertices and $p=0.5$ is the probability that two vertices have an edge connecting them. We show how local analytic bounds can be constructed and extended via an adaptive continuation algorithm. All numerical experiments were conducted on connected Erd\H{o}s--R\'{e}nyi random graphs with random edge weights.
+
+\subsection{Problem Formulation, Symmetry Sectors, and Hamiltonians}
+To benchmark the certificates, we study the spectral gap along the linear adiabatic path $H(s) = (1 - s) H_I + s H_P$ for $s \in [0, 1]$.
+As written, the problem Hamiltonian encoding the Max-Cut cost function is invariant under global bit complementation (the global spin-flip). Consequently, every cut configuration and its bitwise complement have the exact same energy, leading to a ground-state space that is at least doubly degenerate at the $s=1$ endpoint. In the full Hilbert space $\mathcal{H} \cong \mathbb{C}^{2^N}$, this would imply that the true spectral gap closes trivially at the end of the schedule, i.e., $E_1(1) = E_0(1)$ and $\Delta(1) = 0$.
+
+To resolve this trivial degeneracy and enable meaningful gap certification across the entire schedule, we restrict our analysis to the even-parity sector of the Hilbert space. Both the physical driver Hamiltonian $H_I^{\mathrm{phys}}$ and the problem Hamiltonian $H_P^{\mathrm{phys}}$ commute with the global parity operator (spin-flip symmetry) $P = \prod_{i=1}^{n_v} X_i$, where $n_v$ is the number of graph vertices (physical qubits). Because $P^2 = I$, the Hilbert space decomposes into two orthogonal, invariant symmetry sectors: the even-parity sector $\mathcal{H}_+$ (eigenvalue $+1$) and the odd-parity sector $\mathcal{H}_-$ (eigenvalue $-1$). The physical driver ground state $\ket{+}^{\otimes n_v}$ belongs to the even sector $\mathcal{H}_+$. Since the Hamiltonian preserves this parity symmetry for all $s$, the AQC dynamics are entirely restricted to $\mathcal{H}_+$.
+
+Within $\mathcal{H}_+$, the effective dimension is $d_+ = 2^{n_v-1} = 2^N$, where $N = N_{\mathrm{eff}} = n_v - 1$ is the number of effective qubits. In the figures and tables, the labels $N \in \{10, 12, 14\}$ refer to these effective qubits $N$ (corresponding to graph vertices $n_v \in \{11, 13, 15\}$). We construct the symmetry-adapted basis by quotienting the physical configuration space $\{0,1\}^{n_v}$ by the global spin-flip symmetry (complementarity). By fixing the spin of the first vertex to $+1$ (i.e., bit value 0), each basis state of $\mathcal{H}_+$ is represented by an effective bit string $x \in \{0, 1\}^N$. For Erd\H{o}s--R\'{e}nyi graphs with random continuous weights, the maximum cut is unique almost surely, translating to a nondegenerate ground state of $H_P$ in the even-parity sector. The gap is therefore defined in this sector as $\Delta(s) = E_1(s) - E_0(s)$, where $E_0(s)$ and $E_1(s)$ are the two lowest eigenvalues of $H(s)$ restricted to $\mathcal{H}_+$.
+
+The unreduced physical driver Hamiltonian is $H_I^{\mathrm{phys}} = \frac{1}{2} \sum_{i=1}^{n_v} (I - X_i)$. In the symmetry-adapted basis of $N = n_v - 1$ effective qubits, a single physical spin flip $X_i$ on the unpinned vertices corresponds to a single-qubit flip $X_i$ on the representative qubits, whereas a spin flip on the pinned vertex corresponds to a global complementation $\prod_{i=1}^N X_i$. Thus, the reduced driver Hamiltonian acting on the representative basis is:
+\begin{equation}
+H_{I,+} = \frac{1}{2} \left( n_v I - \sum_{i=1}^N X_i - \prod_{i=1}^N X_i \right).
+\end{equation}
+This is a positive-semidefinite (PSD) operator whose ground state energy is $E_0(H_{I,+}) = 0$ (corresponding to the uniform superposition state). In the full space, the physical driver gap is 1. However, because $\mathcal{H}_+$ contains only states with an even Hamming weight in the X-basis, the lowest allowed driver excitation contains exactly two spin flips, so that the initial spectral gap in the even sector is explicitly:
+\begin{equation}
+\Delta_+(0) = 2.
+\end{equation}
+The problem Hamiltonian restricted to $\mathcal{H}_+$ acting on $N$ effective qubits encodes the Max-Cut cost function, heavily penalizing uncut edges:
+\begin{equation}
+H_{P,+} = \sum_{j : (1,j) \in E} w_{1j} \frac{I + Z_{j-1}}{2} + \sum_{(i,j) \in E, i,j > 1} w_{ij} \frac{I + Z_{i-1} Z_{j-1}}{2},
+\end{equation}
+where $E$ is the set of edges and $w_{ij}$ are the random edge weights. In this representative qubit basis, physical spins are indexed relative to the pinned vertex 1. Both $H_{I,+}$ and $H_{P,+}$ are positive-semidefinite.
+
+\subsection{Endpoint-Only and Local Gap Certification (\texorpdfstring{$L_{\mathrm{cert}}$ vs. $L_{\mathrm{true}}$}{Lcert vs. Ltrue})}
+We first evaluate the Weyl endpoint certificate using only initial and final boundary information.
+Figure~\ref{fig:no_anchors} shows a high-accuracy numerical reference gap alongside the bounds derived solely from the spectra of the initial and final Hamiltonians ($H_I$ and $H_P$).
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.88\textwidth]{comparison_updated_N10_no_anchors.png}
+\caption{Weyl endpoint lower bound using only the endpoints $s=0$ and $s=1$ as anchors. The system is a random $N=10$ Max-Cut instance (using seed $0$).}
+\label{fig:no_anchors}
+\end{figure}
+
+The endpoint-only Weyl certificate bounds the spectral gap away from zero within finite regions near the endpoints using \textit{only} boundary spectral data. Its uniform Lipschitz cones naturally fail to certify the gap near the midpoint where avoided crossings typically occur.
+
+To perform local certification at any point $s_0$, define the Hamiltonian-variation norm
+\begin{equation}
+L_H := \norm{H_P-H_I}_2.
+\end{equation}
+Every ordered eigenvalue is $L_H$-Lipschitz and the gap is therefore $2L_H$-Lipschitz. We use $L_{\mathrm{cert}}$ only for a certified upper bound on $L_H$:
+\begin{equation}
+L_H\le L_{\mathrm{cert}},
+\qquad
+|\Delta(t)-\Delta(s)|\le 2L_{\mathrm{cert}}|t-s|.
+\end{equation}
+The distinction prevents $L_{\mathrm{cert}}$ and $2L_{\mathrm{cert}}$ from both being called the gap Lipschitz constant.
+
+A triangle-inequality estimate gives the inexpensive bound $L_{\mathrm{loose}}=W+n_v$, where $W=\sum_{(i,j)\in E}w_{ij}$. Positivity gives a tighter analytic bound. Since
+\begin{equation}
+0\le H_P\le WI,
+\qquad
+0\le H_I\le \Lambda_I I,
+\qquad
+\Lambda_I=2\left\lfloor\frac{n_v}{2}\right\rfloor
+\end{equation}
+in the even-parity sector, one has
+\begin{equation}
+-\Lambda_I I\le H_P-H_I\le WI,
+\qquad
+\boxed{L_H\le L_{\mathrm{PSD}}:=\max\!\left\{W,2\left\lfloor\frac{n_v}{2}\right\rfloor\right\}.}
+\end{equation}
+Both bounds are analytic and auditable. The archived benchmark run used $L_{\mathrm{cert}}=L_{\mathrm{loose}}$; consequently, its solve counts must not be presented as results for the tighter PSD bound. Table~\ref{tab:norm_bounds} quantifies the conservatism using a high-accuracy numerical estimate of $L_H$ obtained from the extremal eigenvalues of $H_P-H_I$.
+
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{cccccc}
+\toprule
+$N$ & Estimated $L_H$ & $W+n_v$ & $L_{\mathrm{PSD}}$ & Loose/estimated & PSD/estimated \\
+\midrule
+10 & 21.73 & 37.57 & 26.57 & 1.74 & 1.23 \\
+12 & 32.16 & 51.04 & 38.04 & 1.60 & 1.19 \\
+14 & 45.33 & 67.24 & 52.24 & 1.49 & 1.15 \\
+\bottomrule
+\end{tabular}
+\caption{Ensemble means over 20 instances. ``Estimated'' denotes an ordinary floating-point extremal eigensolve and is not itself a verified bound. The archived continuation data use the loose column. Re-running with $L_{\mathrm{PSD}}$ is expected to increase accepted step lengths by the ratio $(W+n_v)/L_{\mathrm{PSD}}$, but no anchor-count reduction is claimed without a regenerated sweep.}
+\label{tab:norm_bounds}
+\end{table}
+
+\subsection{Anchor Calculations and Certification Levels}
+At each anchor $s_k$, we estimate the two lowest eigenpairs using SciPy's sparse Lanczos interface \texttt{eigsh}. To monitor numerical reliability, we compute the residual norms
+\begin{equation}
+r_j = \norm{\bigl(H(s_k) - \theta_j I\bigr)\ket{\psi_j}}_2, \qquad j=0,1,
+\end{equation}
+where $\theta_j$ is a Ritz value and $\ket{\psi_j}$ is its Ritz vector. A residual theorem guarantees only
+\begin{equation}
+\operatorname{dist}(\theta_j,\operatorname{spec}H(s_k))\le r_j.
+\end{equation}
+It does not establish that the nearby exact eigenvalue has index $j$, that no lower eigenvalue was missed, or that the two residual intervals enclose distinct ordered eigenvalues. However, because $\theta_0=\langle\psi_0,H(s_k)\psi_0\rangle$ is a Rayleigh quotient, the variational principle gives the unconditional upper bound $E_0(s_k)\le\theta_0$ in exact arithmetic. Conditional on $\theta_1$ having the correct first-excited-state index, the residual estimate gives $E_1(s_k)\ge\theta_1-r_1$. The conditional numerical anchor estimate implemented in the experiments is therefore
+\begin{equation}
+\Delta_{\mathrm{lo}}(s_k)=\max\{0,(\theta_1-r_1)-\theta_0\}.
+\end{equation}
+The ground-state residual $r_0$ is still recorded as a numerical diagnostic, but it is not needed in this Rayleigh--Ritz upper bound. Accordingly, residual monitoring establishes numerical quality but not an indexed eigenvalue certificate.
+
+We use the following terminology throughout:
+\begin{description}
+\item[Level 1: formal propagation theorem.] The interval theorem is exact, conditional on exact or certified input bounds.
+\item[Level 2: high-accuracy numerical realization.] Anchor gaps are estimated using sparse eigensolves and residual diagnostics. Propagation is algebraically rigorous conditional on correct eigenvalue indexing and valid numerical anchor bounds.
+\item[Level 3: fully verified numerical certificate.] Indexed anchor energies are enclosed using interval arithmetic, verified inertia counting, or another verified eigenvalue-enclosure method.
+\end{description}
+The experiments in this paper are Level 2 numerical realizations, not Level 3 certificates. No verified inertia calculation is performed. Selected $N=10$ reference data were compared against dense floating-point calculations on a 201-point grid; this is a post hoc numerical check rather than interval verification.
+
+Figure~\ref{fig:with_anchors} illustrates how providing a finite budget of intermediate anchors increases the certified coverage of the path.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.88\textwidth]{comparison_updated_N10_anchors.png}
+\caption{Improvement of the Weyl lower bound with increasing adaptive eigensolve budgets. The curves use $5$, $15$, and $25$ adaptive eigensolves beginning at $s=0$, together with the analytically known $s=1$ endpoint datum. These are illustrative budgeted envelopes, not completed positivity sweeps. The system is a random $N=10$ Max-Cut instance (seed $0$).}
+\label{fig:with_anchors}
+\end{figure}
+
+As the number of anchors increases, the plotted Weyl lower bound tracks the numerical reference curve more closely. Weyl--Lipschitz propagation requires only the two lowest indexed eigenvalue bounds and an analytic norm bound. Sparse Krylov methods require matrix--vector products and avoid full $O(d^3)$ dense diagonalization; their practical cost depends on sparsity, convergence tolerance, spectral separation, and warm-start quality. We therefore make no linear-time complexity claim for the eigensolve.
+
+\subsection{Adaptive Certified Continuation and Positivity Theorem}
+Using the Weyl--Lipschitz bound, we implement an adaptive continuation sweep that partitions $[0,1]$ into positivity-certified and unresolved intervals. The rule concentrates anchor evaluations in small-gap regions and uses fewer evaluations in wide-gap regions, although its total cost relative to any fixed uniform baseline is instance-dependent:
+\begin{equation}
+h_k = \eta \frac{\Delta_{\mathrm{lo}}(s_k)}{2 L_{\mathrm{cert}}},
+\end{equation}
+where $\eta \in (0,1)$ is a safety parameter. If the computed step size falls below a resolution floor $h_{\mathrm{floor}}$, the step is overridden to $h_{\mathrm{floor}}$ and the interval is flagged as unresolved.
+
+\begin{tabbing}
+\quad \= \quad \= \quad \= \quad \= \kill
+\textbf{Algorithm 1: Adaptive Positivity continuation sweep} \\
+\textbf{Inputs:} Path operator $H(s)$, certified upper bound $L_{\mathrm{cert}}\ge L_H$, safety parameter $\eta\in(0,1)$, resolution floor $h_{\mathrm{floor}}$.
+\textbf{Outputs:} List of anchors $\mathcal{A} = \{(s_k, \Delta_{\mathrm{lo}}(s_k))\}$, list of unresolved intervals $\mathcal{U}$. \\
+1. Initialize $s \leftarrow 0.0$, $\mathcal{A} \leftarrow \emptyset$, $\mathcal{U} \leftarrow \emptyset$. \\
+2. \textbf{While} $s < 1.0$: \\
+3. \> Obtain an anchor quantity $\Delta_{\mathrm{lo}}(s)$; at Level 2 this is a conditional numerical estimate.
+4. \> Add $(s, \Delta_{\mathrm{lo}}(s))$ to $\mathcal{A}$. \\
+5. \> Set step size $h \leftarrow \eta \frac{\Delta_{\mathrm{lo}}(s)}{2 L_{\mathrm{cert}}}$. \\
+6. \> \textbf{If} $h < h_{\mathrm{floor}}$: \\
+7. \>\> Set $h \leftarrow h_{\mathrm{floor}}$. \\
+8. \>\> Add unresolved interval $[s, \min(1.0, s+h)]$ to $\mathcal{U}$. \\
+9. \> Update $s \leftarrow \min(1.0, s + h)$. \\
+10. \textbf{Return} $\mathcal{A}$, $\mathcal{U}$.
+\end{tabbing}
+
+The step-size rule in Algorithm 1 guarantees the following:
+
+\begin{theorem}[Certified Gap Positivity]
+\label{thm:continuation-positivity}
+Let $H(s)=(1-s)H_I+sH_P$ be an affine path, let $L_H\le L_{\mathrm{cert}}$, and suppose each recorded anchor quantity is a genuine bound $0<\Delta_{\mathrm{lo}}(s_k)\le\Delta(s_k)$. For any step $[s_k,s_{k+1}]$ that is not in $\mathcal U$, the true spectral gap satisfies
+\begin{equation}
+\Delta(s) \ge (1-\eta)\Delta_{\mathrm{lo}}(s_k) > 0 \quad \forall s \in [s_k, s_{k+1}].
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By Proposition~\ref{prop:lipschitz-gap}, the spectral gap $\Delta(s)$ is Lipschitz continuous with constant $2L_H\le 2L_{\mathrm{cert}}$. Therefore, for any $s \in [s_k,s_k+h_k]$:
+\begin{equation}
+|\Delta(s) - \Delta(s_k)| \le 2 L_{\mathrm{cert}} (s - s_k) \le 2 L_{\mathrm{cert}} h_k.
+\end{equation}
+Using the assumed anchor bound $\Delta(s_k)\ge\Delta_{\mathrm{lo}}(s_k)$ gives
+\begin{equation}
+\Delta(s) \ge \Delta_{\mathrm{lo}}(s_k) - 2 L_{\mathrm{cert}} h_k.
+\end{equation}
+Substituting the step size $h_k = \eta \frac{\Delta_{\mathrm{lo}}(s_k)}{2 L_{\mathrm{cert}}}$ yields:
+\begin{equation}
+\Delta(s) \ge \Delta_{\mathrm{lo}}(s_k) - 2 L_{\mathrm{cert}} \left( \eta \frac{\Delta_{\mathrm{lo}}(s_k)}{2 L_{\mathrm{cert}}} \right) = (1-\eta)\Delta_{\mathrm{lo}}(s_k).
+\end{equation}
+Since the step is not in $\mathcal{U}$, we have $h_k \ge h_{\mathrm{floor}} > 0$. Because $\Delta_{\mathrm{lo}}(s_k) \ge \frac{2 L_{\mathrm{cert}} h_k}{\eta} > 0$ and $0 < \eta < 1$, we conclude:
+\begin{equation}
+\Delta(s) \ge (1-\eta)\Delta_{\mathrm{lo}}(s_k) > 0 \quad \forall s \in [s_k, s_{k+1}].
+\end{equation}
+\end{proof}
+
+\begin{theorem}[Termination of the Continuation Sweep]
+\label{thm:termination}
+Suppose there is a number $\delta_{\mathrm{lo}}>0$ such that every anchor calculation made by Algorithm~1 satisfies
+\begin{equation}
+\Delta_{\mathrm{lo}}(s_k)\ge\delta_{\mathrm{lo}}.
+\end{equation}
+Then every non-final accepted interval has the proposed length
+\begin{equation}
+h_k\ge \eta\frac{\delta_{\mathrm{lo}}}{2L_{\mathrm{cert}}},
+\end{equation}
+while the final interval may be shortened to end exactly at $s=1$. The sweep covers $[0,1]$ with at most
+\begin{equation}
+N_{\mathrm{int}}\le\left\lceil\frac{2L_{\mathrm{cert}}}{\eta\delta_{\mathrm{lo}}}\right\rceil
+\end{equation}
+intervals.
+\end{theorem}
+\begin{proof}
+The assumed lower bound on the computed anchor quantities gives the stated uniform lower bound on $h_k$. Successive accepted steps therefore advance $s$ by at least this amount, except for the final shortened interval, and the ceiling bound follows.
+\end{proof}
+Here $N_{\mathrm{int}}$ counts intervals. Under Algorithm~1's convention, each interval begins with one anchor eigensolve, so the recorded solve count equals $N_{\mathrm{int}}$; an implementation that also solves independently at the terminal endpoint would use one additional solve. A positive lower bound on the true gap alone does not imply the theorem's hypothesis, because numerical enclosure error can make $\Delta_{\mathrm{lo}}(s_k)<\Delta(s_k)$.
+
+\subsection{Auditable Certificate Format and Output}
+The output of the continuation sweep is a sequence of interval certificates. Each successful step $k$ produces a certificate:
+\begin{equation}
+\mathcal{C}_k = \left( s_k, \, s_{k+1}, \, \Delta_{\mathrm{lo}}(s_k), \, L_{\mathrm{cert}}, \, B_k \right),
+\end{equation}
+where $B_k=(1-\eta)\Delta_{\mathrm{lo}}(s_k)$ is the conditional lower bound on the interval. A third party can verify the continuation inequality conditional on the recorded anchor-gap bounds by checking
+\begin{equation}
+s_{k+1}-s_k\le\eta\frac{\Delta_{\mathrm{lo}}(s_k)}{2L_{\mathrm{cert}}}.
+\end{equation}
+This algebraic check does not independently establish the indexed anchor bounds.
+
+The included selected-run Level 2 JSON record contains $\theta_0,\theta_1,r_0,r_1$ at every anchor; solver tolerance, \texttt{which}, \texttt{ncv}, iteration policy, convergence status, and warm-start policy; the complete weighted edge list and its hash; the Hamiltonian and graph parameters; $W$, $n_v$, and the derivation of $L_{\mathrm{cert}}$; the eigenvalue-indexing status; unresolved intervals; and software and repository versions. The aggregate 60-instance CSV is a performance archive rather than a substitute for 60 independently verified per-anchor records. A Level 3 record must additionally contain or reference independently checkable indexed enclosures, such as verified inertia intervals. The selected JSON output is therefore a self-identifying Level 2 conditional diagnostic log and must not be interpreted as independently verifying its own floating-point anchor inputs. Steps below $h_{\mathrm{floor}}$ are flagged and recorded in the unresolved list $\mathcal U$.
+
+\begin{figure}[htbp] \centering \includegraphics[width=\textwidth]{efficiency_comparison.png} \caption{Solve-count comparison between the adaptive positivity sweep and the archived uniform workload-reference grid over 20 random instances per size (seeds 0--19). Bars show medians and error bars show the interquartile range; Table~\ref{tab:anchor_stats} separately reports means and population standard deviations. Performance is strongly instance-dependent: narrow-gap outliers make the adaptive mean larger at $N=12$. The two methods do not provide identical interval-wise guarantees, so this is a workload comparison rather than a speedup theorem.} \label{fig:efficiency} \end{figure}
+
+\begin{figure}[htbp] \centering \includegraphics[width=\textwidth]{grid_density_vs_gap.png} \caption{Anchor density versus the high-accuracy numerical reference gap for $N=10$, seed 0. The rug plot shows the selected anchor locations.} \label{fig:grid_N10} \end{figure}
+
+Figures~\ref{fig:grid_N10}, \ref{fig:grid_N12}, and \ref{fig:grid_N14} illustrate this behavior for the seed-0 instances. The rug plots show that anchor density increases near small numerical reference gaps and decreases in wider-gap regions. Each anchor still requires a sparse eigensolve, whose cost depends on convergence as well as anchor count.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{grid_density_vs_gap_N12.png}
+\caption{Adaptive grid density for $N=12$ (using seed $0$).}
+\label{fig:grid_N12}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{grid_density_vs_gap_N14.png}
+\caption{Adaptive grid density for $N=14$ (using seed $0$). The concentration of anchors becomes more pronounced as the avoided crossing sharpens.}
+\label{fig:grid_N14}
+\end{figure}
+
+The adaptive and uniform constructions distribute evaluations differently. The adaptive rule concentrates work around small-gap regions, but the total solve count can be either smaller or larger than the chosen uniform reference grid. In particular, very narrow gaps can create substantial adaptive overhead.
+
+\subsubsection{Experimental Specification and Setup}
+To validate the performance of Algorithm 1, we conduct numerical experiments under the following setup:
+\begin{itemize}
+    \item \textbf{Graph Generation:} We generate random Erd\H{o}s--R\'{e}nyi graphs $G(n, p=0.5)$ where $n = N + 1$ is the number of vertices, so that the even-parity sector of the $N+1$ physical qubits maps to an $N$-qubit space (dimension $2^N$). The edge weights $w_{ij}$ are chosen independently and uniformly at random from the continuous interval $[0.5, 1.5]$.
+    \item \textbf{Instance Filtering:} Instances are resampled until the problem Hamiltonian has a nondegenerate lowest energy in the reduced sector. The archived generator does not separately condition on graph connectivity.
+    \item \textbf{Eigensolvers and Parameters:} Numerical estimates use \texttt{scipy.sparse.linalg.eigsh} with $k=2$, \texttt{which='SA'}, tolerance $10^{-10}$, \texttt{ncv}$=\min(d_+-1,50)$, SciPy's default maximum-iteration policy, and the previous ground-state Ritz vector as the next warm start. An ARPACK nonconvergence exception constitutes a failed run; no such flag is converted into an accepted anchor. The continuation uses $\eta=0.9$, $h_{\mathrm{floor}}=10^{-6}$, and the archived loose bound $L_{\mathrm{cert}}=W+n_v$. Algorithm~1 has no target-gap parameter. The value $\delta_{\mathrm{ref}}=0.25$ is used only to set the spacing of the auxiliary uniform reference grid.
+    \item \textbf{Computational Hardware and Software:} The algorithm was implemented in Python 3.12.10 and executed on a standard desktop computer with an 12th Gen Intel(R)
+Core(TM) i5-1245U and 16 GB of RAM. Eigensolve wall-clock times are recorded as a secondary performance metric.
+\end{itemize}
+
+\subsubsection{Performance Statistics}
+Table~\ref{tab:anchor_stats} reports solve counts for Algorithm~1 and the archived uniform reference grid over 20 instances per size. Because the uniform grid is set by the auxiliary resolution parameter $\delta_{\mathrm{ref}}$ rather than by each instance's minimum gap, the columns are a computational comparison and not an equal-rigor comparison.
+
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{ccccccc}
+\toprule
+$N$ & \multicolumn{2}{c}{Anchor Counts} & \multicolumn{4}{c}{Percentage Query Reduction} \\
+\cmidrule(r){2-3} \cmidrule(r){4-7}
+& Uniform Grid & Adaptive Sweep & Mean $\pm$ SD & Min & Median & Max \\
+\midrule
+10 & $303.0 \,/\, 301.95 \pm 26.51$ & $199.5 \,/\, 256.00 \pm 164.88$ & $13.49\% \pm 58.40\%$ & $-134.49\%$ & $32.54\%$ & $69.97\%$ \\
+12 & $409.0 \,/\, 409.65 \pm 31.57$ & $349.0 \,/\, 704.60 \pm 1104.28$ & $-82.97\% \pm 307.49\%$ & $-1110.16\%$ & $13.92\%$ & $70.20\%$ \\
+14 & $531.0 \,/\, 539.35 \pm 35.04$ & $433.0 \,/\, 473.15 \pm 275.39$ & $11.48\% \pm 54.00\%$ & $-204.26\%$ & $20.07\%$ & $55.77\%$ \\
+\bottomrule
+\end{tabular}
+\caption{Archived solve-count comparison over 20 weighted Erd\H{o}s--R\'{e}nyi instances per size, with $\eta=0.9$, $h_{\mathrm{floor}}=10^{-6}$, $L_{\mathrm{cert}}=W+n_v$, and uniform-grid resolution parameter $\delta_{\mathrm{ref}}=0.25$. Counts are Median / Mean $\pm$ population SD. Negative percentages mean that the adaptive sweep used more solves.}
+\label{tab:anchor_stats}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{ccccc}
+\toprule
+$N$ & Full-path resolved & Mean unresolved intervals & Mean width & Maximum width \\
+\midrule
+10 & $20/20$ & 0 & 0 & 0 \\
+12 & $19/20$ & 0.05 & $2.065\times10^{-5}$ & $4.13\times10^{-4}$ \\
+14 & $20/20$ & 0 & 0 & 0 \\
+\bottomrule
+\end{tabular}
+\caption{Unresolved-set statistics for the archived run. ``Full-path resolved'' means $\mathcal U=\varnothing$. The floor was activated for 413 consecutive $10^{-6}$ steps in the single unresolved $N=12$ run; the aggregate CSV stores these as one merged interval.}
+\label{tab:unresolved_stats}
+\end{table}
+
+The adaptive mean is skewed by rare outliers. For $N=12$, seed 13 has a minimum gap observed at its adaptive anchors of approximately $1.6\times10^{-5}$, uses 3513 solves, and produces the unresolved interval in Table~\ref{tab:unresolved_stats}. Seed 9 has a minimum adaptive-anchor gap of approximately $2.9\times10^{-3}$ and uses 4405 solves. These two values are diagnostics from the continuation trajectories, not minima from independent dense reference grids.
+
+The adaptive sweep responds to these crossings by taking small steps and, when a proposed step is below $h_{\mathrm{floor}}$, recording an unresolved interval. The uniform reference grid uses $h_{\mathrm{uniform}}=\delta_{\mathrm{ref}}/(2L_{\mathrm{cert}})$ only as a fixed workload baseline; it is not claimed to have equal interval-wise rigor.
+
+These data show instance-dependent behavior rather than a uniform speedup. The adaptive mean is lower for $N=10$ and $N=14$ but substantially higher, with large variance, for $N=12$. Medians are lower than the reference-grid medians at all three sizes, but narrow-gap outliers dominate some means. Post hoc comparison against a numerical reference curve is useful for detecting violations, but it is not the algorithm's formal success criterion; the relevant output is whether the unresolved set $\mathcal U$ is empty.
+
+The norm bound directly controls the step length. For the archived ensembles, the mean loose values $W+n_v$ are 37.57, 51.04, and 67.24 for $N=10,12,14$, respectively; the smaller numbers 21.73, 32.16, and 45.33 are floating-point estimates of $L_H$, not certified constants. Table~\ref{tab:norm_bounds} shows that the tighter PSD bound substantially reduces this conservatism.
+
+Anchor density grows near narrow avoided crossings, but anchor count alone does not determine wall-clock cost because Krylov convergence also changes with spectral separation and warm-start quality. The present data do not establish a constant-factor query or wall-clock reduction.
+
+\subsection{Integral-Based Cost Model}
+Ignoring the final shortened interval, floor overrides, and integer rounding, the implemented rule suggests the continuum approximation
+\begin{equation}
+\label{eq:integral_cost}
+N_{\mathrm{heuristic}}\approx\frac{2L_{\mathrm{cert}}}{\eta}\int_0^1\frac{\dd s}{\widetilde\Delta_{\mathrm{lo}}(s)},
+\end{equation}
+where $\widetilde\Delta_{\mathrm{lo}}$ is an interpolated numerical anchor-bound curve. If anchor error is negligible, replacing this curve by the numerical reference gap gives
+\begin{equation}
+N_{\mathrm{heuristic}}\approx\frac{2L_{\mathrm{cert}}}{\eta}\int_0^1\frac{\dd s}{\Delta(s)}.
+\end{equation}
+This is an idealized cost interpretation, not a complexity bound. It omits eigensolver enclosure error, floor overrides, the final shortened interval, and rounding. Moreover, prediction and observation are not statistically independent if both are generated from the same reference gap and step rule.
+
+The archived data contain a computed integral only for the validated $N=10$, seed-0 run: the model gives 115.92 and the sweep uses 116 anchor solves. The stale ensemble values previously reported for all three sizes have been removed. A meaningful ensemble test requires regenerating this quantity independently for all 60 instances, then reporting predicted-versus-observed correlation, mean absolute percentage error, and residuals versus the minimum numerical reference gap. Until that analysis is performed, the single close match is illustrative rather than a validation of the model.
+
+\section{Conclusions}
+
+In this paper, we have developed a rigorous, finite-dimensional Matrix Analysis framework for certifying lower bounds on the instantaneous spectral gap during adiabatic quantum computation. By moving away from continuous-time integrals and focusing on discrete spectral perturbation theory, we provided a suite of analytically checkable certificates:
+\begin{itemize}
+    \item \textbf{Weyl's Inequality} yields global, Lipschitz-continuous gap propagation, allowing us to strictly bound local gap fluctuations using only the spectral norm of the perturbation.
+    \item \textbf{Positive-semidefinite monotonicity} provides componentwise energy-floor certificates, demonstrating that PSD catalysts and constraint-penalty terms can rigorously lift energy levels relative to unperturbed paths.
+\end{itemize}
+
+For finite-size weighted Max-Cut instances, the Level 2 realization shows that endpoint data certify regions near the schedule boundaries and that intermediate anchors partition the remainder into positivity-accepted and unresolved intervals, conditional on the numerical anchor bounds. The experiments quantify how continuation cost depends on the integrated inverse gap, conservatism of the norm bound, and selected numerical resolution. Relative solve counts are strongly instance-dependent; no uniform speedup is claimed.
+
+The main outcome is therefore a transparent formal propagation method and an auditable high-accuracy numerical realization. Fully verified certification requires indexed interval eigenvalue enclosures at every anchor.
+
+\section{Accessibility of the Code and Data}
+
+The code and data associated with the empirical experiments in this paper are publicly available on GitHub at \url{https://github.com/TiagoVerissimo/Bounding_Spectral_Gaps}.
+
+\section{Future Research}
+
+This section outlines several open questions suggested by the certification framework developed in this paper.
+
+\begin{enumerate}
+    \item \textbf{Non-affine paths and quantum catalysts.} The present framework assumes the linear interpolation
+    \begin{equation}
+    H(s)=(1-s)H_I+sH_P.
+    \end{equation}
+    However, nonlinear scheduling functions and catalytic Hamiltonians require a corresponding extension of the analysis. It is therefore important to understand how Weyl-type certificates adapt to paths of the form
+    \begin{equation}
+    H(s)=a(s)H_I+b(s)H_P+c(s)H_C,
+    \end{equation}
+    where $H_C$ is a catalyst term and $a(s)$, $b(s)$, and $c(s)$ are scheduling functions. This would extend the present analysis from affine lines in $\Herm(d)$ to more general curves in the space of Hamiltonians.
+    \item \textbf{Broader class-specific certificates for hard optimization problems.} The computational section applied the certification framework to finite-size Max-Cut instances on Erdős--Rényi random graphs, showing how Weyl--Lipschitz propagation can be combined with intermediate anchors in a concrete optimization setting. A natural next step is to extend this empirical and analytic program beyond these random Max-Cut instances to other problem families, such as weighted graph ensembles with different structure, 3-SAT, or Subset Sum. The goal would be to identify whether particular classes have locality patterns, symmetries, or degeneracies that allow reusable gap certificates, and whether such certificates can prove non-closing gaps for structured families of instances.
+
+    \item \textbf{Quantum-assisted anchor estimation.} At larger $N$, a quantum device might be used to estimate anchor energies with methods such as phase estimation or quantum subspace/Krylov algorithms \cite{Parrish2019, Stair2020}. Adaptive placement would change the number and location of those queries, but the present finite-size data do not establish a uniform reduction. Any such extension must incorporate state-preparation cost, statistical uncertainty, and indexed eigenvalue verification into the recorded anchor bounds.
+\end{enumerate}
+
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
