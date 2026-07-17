@@ -1,0 +1,44 @@
+{
+  "N_values": [
+    10,
+    12
+  ],
+  "csv": {
+    "path": "section7_results.csv",
+    "sha256": "b73a094cf3b5c612d6b1b488311a4da6c1f9c7a515cd23648a9939cb52c8c901"
+  },
+  "graph_archive": {
+    "path": "results/graph_instances.jsonl",
+    "records": 40,
+    "sha256": "0325f5fcc2ea08ef2e3719af0d5210410a8f886abac26c005f0f18f0361bc4d8"
+  },
+  "result_schema_version": 4,
+  "rows": 40,
+  "schema_version": 1,
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19
+  ],
+  "source_sha256": {
+    "main.py": "a6cade752c8530480b3741b86a17762b16f83f42c3eb3e5951321a19af1c0b47",
+    "maxcut_gap_benchmark.py": "addb3bac26421d3de0d2bf7858e599a4b9187e5a902564dec63be983816442b7"
+  }
+}

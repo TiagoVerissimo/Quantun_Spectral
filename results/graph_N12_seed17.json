@@ -1,0 +1,340 @@
+{
+  "K_gap_cert": 54.610903184525995,
+  "K_gap_cert_denominator": 35184372088832,
+  "K_gap_cert_exact": {
+    "denominator": 35184372088832,
+    "numerator": 1921450337751543
+  },
+  "K_gap_cert_hex": "0x1.b4e32135747dcp+5",
+  "K_gap_cert_numerator": 1921450337751543,
+  "K_gap_exact": {
+    "denominator": 4503599627370496,
+    "numerator": 245945643232197485
+  },
+  "K_gap_exact_denominator": 4503599627370496,
+  "K_gap_exact_numerator": 245945643232197485,
+  "K_gap_from_W_upper_exact": {
+    "denominator": 35184372088832,
+    "numerator": 1921450337751543
+  },
+  "Lambda_I": 12,
+  "N_effective_qubits": 12,
+  "W_exact": {
+    "denominator": 4503599627370496,
+    "numerator": 191902447703751533
+  },
+  "W_exact_denominator": 4503599627370496,
+  "W_exact_numerator": 191902447703751533,
+  "W_model": 42.61090318452599,
+  "W_model_hex": "0x1.54e32135747dbp+5",
+  "W_upper": 42.610903184525995,
+  "W_upper_denominator": 35184372088832,
+  "W_upper_exact": {
+    "denominator": 35184372088832,
+    "numerator": 1499237872685559
+  },
+  "W_upper_hex": "0x1.54e32135747dcp+5",
+  "W_upper_numerator": 1499237872685559,
+  "analytic_inequality": "-Lambda_I I <= D <= W_exact I <= W_upper I and diameter(D) <= K_gap_cert",
+  "edge_list": [
+    [
+      0,
+      2,
+      1.0577445473656921
+    ],
+    [
+      0,
+      3,
+      0.7149419635617684
+    ],
+    [
+      0,
+      4,
+      0.9281644990936084
+    ],
+    [
+      0,
+      7,
+      0.7540409137926393
+    ],
+    [
+      0,
+      9,
+      1.4977636809229766
+    ],
+    [
+      0,
+      11,
+      1.0675398131484446
+    ],
+    [
+      1,
+      2,
+      0.6790838739132345
+    ],
+    [
+      1,
+      3,
+      0.9619579095338642
+    ],
+    [
+      1,
+      5,
+      1.4197756801082628
+    ],
+    [
+      1,
+      7,
+      0.7031615564618308
+    ],
+    [
+      1,
+      8,
+      1.362035036237367
+    ],
+    [
+      1,
+      9,
+      1.4910656220413978
+    ],
+    [
+      1,
+      11,
+      1.1586973050511808
+    ],
+    [
+      2,
+      4,
+      1.1299181968345016
+    ],
+    [
+      2,
+      5,
+      1.1532888148767353
+    ],
+    [
+      2,
+      7,
+      1.4087380258134665
+    ],
+    [
+      2,
+      8,
+      0.8107606288937099
+    ],
+    [
+      2,
+      9,
+      0.843049972540729
+    ],
+    [
+      3,
+      4,
+      1.3414979981084842
+    ],
+    [
+      3,
+      5,
+      1.0480450225087115
+    ],
+    [
+      3,
+      7,
+      0.7279789348352927
+    ],
+    [
+      3,
+      8,
+      0.748819790862154
+    ],
+    [
+      3,
+      9,
+      0.7932082928393731
+    ],
+    [
+      3,
+      10,
+      1.1468235747897353
+    ],
+    [
+      3,
+      12,
+      1.1316684825474632
+    ],
+    [
+      4,
+      6,
+      0.6989250524341802
+    ],
+    [
+      4,
+      7,
+      1.294363445317376
+    ],
+    [
+      4,
+      12,
+      0.9417035314893507
+    ],
+    [
+      5,
+      7,
+      0.7955045590866319
+    ],
+    [
+      5,
+      8,
+      0.5103403670280214
+    ],
+    [
+      5,
+      11,
+      0.7492314950977337
+    ],
+    [
+      6,
+      7,
+      0.7604540277264545
+    ],
+    [
+      6,
+      9,
+      1.125348532812831
+    ],
+    [
+      6,
+      12,
+      1.2139278126492195
+    ],
+    [
+      7,
+      9,
+      1.16174286811259
+    ],
+    [
+      7,
+      11,
+      1.2824603890528805
+    ],
+    [
+      7,
+      12,
+      1.0525884678082529
+    ],
+    [
+      8,
+      11,
+      0.9147658756276575
+    ],
+    [
+      9,
+      11,
+      1.2012552619418484
+    ],
+    [
+      10,
+      11,
+      1.019457114075759
+    ],
+    [
+      10,
+      12,
+      0.9438530537878286
+    ],
+    [
+      11,
+      12,
+      0.8652111937947511
+    ]
+  ],
+  "edge_payload_sha256": "bcd7401f033eda48546e1f75d66c3eb434bb72bbb3cd769f1f5f886a7b758cd8",
+  "edge_weight_hex": [
+    "0x1.0ec858be753d9p+0",
+    "0x1.6e0cdf801256ep-1",
+    "0x1.db386091d49e4p-1",
+    "0x1.8211a6912bb1dp-1",
+    "0x1.7f6d70cab3654p+0",
+    "0x1.114a4a08a6888p+0",
+    "0x1.5bb0e1ab658b8p-1",
+    "0x1.ec85bf4327278p-1",
+    "0x1.6b766b41b89d1p+0",
+    "0x1.6804caa19db4ep-1",
+    "0x1.5cae5400a54a6p+0",
+    "0x1.7db67a02db924p+0",
+    "0x1.28a062f7287d0p+0",
+    "0x1.214251a68f39cp+0",
+    "0x1.273def8ebcf92p+0",
+    "0x1.68a30e25801d0p+0",
+    "0x1.9f1c0463f73bap-1",
+    "0x1.afa43ef9e989cp-1",
+    "0x1.576c69ad86814p+0",
+    "0x1.0c4cadb869168p+0",
+    "0x1.74b9a7aa96c86p-1",
+    "0x1.7f654ec0b3763p-1",
+    "0x1.961f65b9527b8p-1",
+    "0x1.25963ad400f40p+0",
+    "0x1.21b50692748eap+0",
+    "0x1.65d981251ea9dp-1",
+    "0x1.4b5b671ac6a8ep+0",
+    "0x1.e226f71c8c870p-1",
+    "0x1.974c5fa23124cp-1",
+    "0x1.054b55246d8ffp-1",
+    "0x1.7f9b454127e92p-1",
+    "0x1.855a3af664a8bp-1",
+    "0x1.2016d769085e8p+0",
+    "0x1.36c3f91f0880ap+0",
+    "0x1.2967fb08e7a20p+0",
+    "0x1.484f52f565c66p+0",
+    "0x1.0d76701562191p+0",
+    "0x1.d45c315ea29b8p-1",
+    "0x1.33857700302acp+0",
+    "0x1.04fb2434a142dp+0",
+    "0x1.e340b51c7f353p-1",
+    "0x1.bafcf62af690ep-1"
+  ],
+  "edge_weight_semantics": "archived binary64 values interpreted as exact dyadic rationals",
+  "edge_weights_sum": 42.61090318452599,
+  "edge_weights_sum_hex": "0x1.54e32135747dbp+5",
+  "edge_weights_sum_semantics": "compatibility alias of W_model",
+  "generation": {
+    "attempts": 1,
+    "rng_bit_generator": "PCG64",
+    "seed": 17
+  },
+  "graph_model": {
+    "acceptance_conditions": [
+      "connected",
+      "nondegenerate pinned optimum"
+    ],
+    "edge_weight_distribution": "independent uniform [0.5, 1.5)",
+    "name": "Erdos-Renyi",
+    "p": 0.5,
+    "p_hex": "0x1.0000000000000p-1"
+  },
+  "graph_record_hash_scope": "SHA-256 of canonical JSON for every record field except graph_record_sha256",
+  "graph_record_sha256": "6669324419f42b4d3dc42d22983f585fbd17c1bbba180d13617d2b020f5f9739",
+  "n_vertices": 13,
+  "num_edges": 42,
+  "provenance": {
+    "repository": {
+      "head": "60ec3ad30931968819e5d02e590a47bcc02d2663",
+      "source_sha256": {
+        "main.py": "a6cade752c8530480b3741b86a17762b16f83f42c3eb3e5951321a19af1c0b47",
+        "maxcut_gap_benchmark.py": "addb3bac26421d3de0d2bf7858e599a4b9187e5a902564dec63be983816442b7"
+      }
+    },
+    "software": {
+      "numpy": "2.2.1",
+      "python": "3.12.10",
+      "scipy": "1.15.0"
+    }
+  },
+  "record_type": "generated_weighted_graph_instance",
+  "rounding_policy": "W_upper is the least binary64 >= W_exact; K_gap_cert is the least binary64 >= exact_binary64(W_upper)+Lambda_I",
+  "row_key": {
+    "N": 12,
+    "seed": 17
+  },
+  "schema_version": 2
+}

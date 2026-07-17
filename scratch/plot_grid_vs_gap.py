@@ -1,100 +1,157 @@
-import os
+from __future__ import annotations
+
 import sys
-import numpy as np
+from pathlib import Path
+
+import matplotlib
+
+matplotlib.use("Agg")
+
 import matplotlib.pyplot as plt
+import numpy as np
 
-# Add current workspace directory to sys.path
-sys.path.append(os.path.abspath("."))
 
-from main import (
-    PathOperator, er_graph, is_connected, pinned_cost_vector, certified_sweep, lowest_two
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from generate_updated_comparison import (  # noqa: E402
+    load_archived_instance,
+    sampled_ritz_gap_curve,
+)
+from main import PathOperator, certified_sweep  # noqa: E402
+from summarize_section7_results import (  # noqa: E402
+    ArtifactValidationError,
+    RESULTS_PATH,
+    sha256_path,
 )
 
-os.makedirs("results", exist_ok=True)
 
-def generate_grid_density_plot(N, seed=0, p=0.5, delta_target=0.25):
-    print(f"Running grid density analysis for N={N}, seed={seed}...")
-    rng = np.random.default_rng(seed)
-    n = N + 1
-    
-    # Match the archive generator: retain connected instances with a nondegenerate endpoint.
-    while True:
-        edges = er_graph(n, p, rng)
-        c = pinned_cost_vector(N, edges)
-        two = np.partition(c, 1)[:2]
-        if is_connected(n, edges) and two[1] > two[0]:
-            break
-            
-    pathop = PathOperator(N, c)
-    W = sum(edge[2] for edge in edges) if len(edges) > 0 and len(edges[0]) > 2 else float(len(edges))
-    L = float(W + N + 1)
-    
-    # 1. Run certified continuation sweep to get the hybrid anchors
-    records, windows, _ = certified_sweep(pathop, L)
-    s_hybrid = np.array([r[0] for r in records])
-    
-    # 2. Construct the fixed-grid workload-reference locations.
-    h_min = delta_target / (2 * L)
-    n_uniform = int(np.ceil(1.0 / h_min)) + 1
-    s_uniform = np.linspace(0.0, 1.0, n_uniform)
-    
-    # 3. Compute a sampled floating-point Ritz-gap reference along s.
-    sgrid = np.linspace(0.0, 1.0, 201)
-    true_gaps = []
-    for s in sgrid:
-        vals, _, _ = lowest_two(pathop.H(s), tol=1e-8)
-        true_gaps.append(vals[1] - vals[0])
-    true_gaps = np.array(true_gaps)
-    
-    # Plotting
-    plt.figure(figsize=(10, 6))
-    
-    colors = {
-        'true': '#1e1e24',      # Dark Charcoal
-        'hybrid': '#3a86c8',    # Soft Blue
-        'uniform': '#f25c54',   # Coral Red
-        'grid': '#9ea1a5'
-    }
-    
-    # Plot true gap curve
-    plt.plot(sgrid, true_gaps, color=colors['true'], lw=2.5, label="Sampled Ritz gap")
-    
-    # Plot raw Ritz gaps at adaptive anchor locations for visualization only.
-    gap_hybrid = []
-    for s in s_hybrid:
-        vals, _, _ = lowest_two(pathop.H(s), tol=1e-8)
-        gap_hybrid.append(vals[1] - vals[0])
-    gap_hybrid = np.array(gap_hybrid)
-    
-    # Plot Hybrid anchor points on the gap curve
-    plt.scatter(s_hybrid, gap_hybrid, color=colors['hybrid'], s=45, zorder=5, 
-                label=f"Adaptive solve points ({len(s_hybrid)} sparse eigensolves)")
-    
-    # Add "Rug Plots" (vertical tick marks) at the bottom to show density of solves
-    rug_height = max(true_gaps) * 0.05
-    plt.vlines(s_hybrid, -0.05, -0.05 + rug_height, colors=colors['hybrid'], lw=1.5, alpha=0.8,
-               label="Adaptive solve density (rug)")
-    plt.vlines(s_uniform, -0.05 - rug_height, -0.05, colors=colors['uniform'], lw=1.0, alpha=0.6,
-               label=f"Fixed-grid solve density (rug: {len(s_uniform)} calls)")
-               
-    # Formatting
-    plt.axhline(0.0, color='gray', lw=0.8)
-    plt.xlabel("Annealing Parameter (s)", fontweight="bold", fontsize=11)
-    plt.ylabel("Spectral Gap", fontweight="bold", fontsize=11)
-    plt.title(f"Solve density versus sampled Ritz gap (N={N}, seed={seed})", fontsize=13, fontweight="bold", pad=15)
-    plt.grid(True, linestyle=":", alpha=0.4)
-    plt.ylim(-0.05 - 1.2 * rug_height, max(true_gaps) * 1.1)
-    plt.legend(fontsize=9, loc="upper right")
-    plt.tight_layout()
-    
-    if N == 10:
-        out_path = "results/grid_density_vs_gap.png"
+OUTPUT_DIR = PROJECT_ROOT / "results"
+
+
+def generate_grid_density_plot(
+    N: int,
+    seed: int = 0,
+    delta_target: float = 0.25,
+) -> Path:
+    if N not in (10, 12):
+        raise ValueError("the archived grid-density figures are limited to N=10,12")
+    if delta_target <= 0.0 or not np.isfinite(delta_target):
+        raise ValueError("delta_target must be finite and positive")
+
+    print(f"Running grid-density analysis for N={N}, seed={seed}...")
+    instance = load_archived_instance(N=N, seed=seed)
+    path_operator = PathOperator(N, instance.costs)
+
+    records, _, _ = certified_sweep(
+        path_operator,
+        instance.K_gap_cert,
+    )
+    s_adaptive = np.asarray([float(record[0]) for record in records])
+    adaptive_ritz_gaps = np.asarray(
+        [float(record[2] - record[1]) for record in records]
+    )
+
+    if instance.K_gap_cert == 0.0:
+        s_uniform = np.asarray([0.0])
     else:
-        out_path = f"results/grid_density_vs_gap_N{N}.png"
-    plt.savefig(out_path, dpi=160)
-    plt.close()
-    print(f"Saved {out_path} successfully.")
+        n_uniform = int(
+            np.ceil(instance.K_gap_cert / float(delta_target))
+        ) + 1
+        s_uniform = np.linspace(0.0, 1.0, n_uniform)
+
+    s_grid = np.linspace(0.0, 1.0, 201)
+    sampled_gaps = sampled_ritz_gap_curve(path_operator, s_grid)
+
+    colors = {
+        "reference": "#1e1e24",
+        "adaptive": "#3a86c8",
+        "uniform": "#f25c54",
+    }
+    figure, axis = plt.subplots(figsize=(10, 6))
+    axis.plot(
+        s_grid,
+        sampled_gaps,
+        color=colors["reference"],
+        linewidth=2.5,
+        label="Sampled Ritz gap",
+    )
+    axis.scatter(
+        s_adaptive,
+        adaptive_ritz_gaps,
+        color=colors["adaptive"],
+        s=45,
+        zorder=5,
+        label=f"Adaptive solve points ({len(s_adaptive)} eigensolves)",
+    )
+
+    maximum_gap = float(np.max(sampled_gaps))
+    rug_height = max(maximum_gap * 0.05, 1e-3)
+    rug_baseline = -rug_height
+    axis.vlines(
+        s_adaptive,
+        rug_baseline,
+        rug_baseline + rug_height,
+        colors=colors["adaptive"],
+        linewidth=1.5,
+        alpha=0.8,
+        label="Adaptive solve density (rug)",
+    )
+    axis.vlines(
+        s_uniform,
+        rug_baseline - rug_height,
+        rug_baseline,
+        colors=colors["uniform"],
+        linewidth=1.0,
+        alpha=0.6,
+        label=f"Fixed-grid density (rug: {len(s_uniform)} calls)",
+    )
+    axis.axhline(0.0, color="gray", linewidth=0.8)
+    axis.set_xlabel("Interpolation parameter $s$", fontweight="bold", fontsize=11)
+    axis.set_ylabel("Reduced-sector Ritz gap", fontweight="bold", fontsize=11)
+    axis.set_title(
+        f"Solve density versus sampled Ritz gap ($N={N}$, seed {seed})",
+        fontsize=13,
+        fontweight="bold",
+        pad=15,
+    )
+    axis.grid(True, linestyle=":", alpha=0.4)
+    axis.set_ylim(rug_baseline - 1.2 * rug_height, maximum_gap * 1.1)
+    axis.legend(fontsize=9, loc="upper right")
+    figure.tight_layout()
+
+    output = (
+        OUTPUT_DIR / "grid_density_vs_gap.png"
+        if N == 10
+        else OUTPUT_DIR / f"grid_density_vs_gap_N{N}.png"
+    )
+    figure.savefig(
+        output,
+        dpi=160,
+        metadata={
+            "Artifact": output.name,
+            "Section7CSV-SHA256": sha256_path(RESULTS_PATH),
+            "GraphRecord-SHA256": str(
+                instance.row["graph_record_sha256"]
+            ),
+        },
+    )
+    plt.close(figure)
+    print(f"Saved {output.relative_to(PROJECT_ROOT)}.")
+    return output
+
+
+def main() -> int:
+    try:
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        for N in (10, 12):
+            generate_grid_density_plot(N, seed=0)
+    except (ArtifactValidationError, OSError, ValueError) as exc:
+        print(f"grid-density plot generation failed: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
 
 if __name__ == "__main__":
-    for N in [10, 12]:
-        generate_grid_density_plot(N, seed=0)
+    raise SystemExit(main())

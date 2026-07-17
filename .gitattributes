@@ -1,0 +1,9 @@
+# Keep hashed source and generated artifacts byte-stable across platforms.
+*.py text eol=crlf
+*.tex text eol=crlf
+*.bib text eol=crlf
+*.csv text eol=crlf
+*.md text eol=lf
+*.json text eol=lf
+*.jsonl text eol=lf
+*.txt text eol=lf
