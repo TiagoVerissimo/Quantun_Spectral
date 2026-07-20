@@ -1,0 +1,69 @@
+{
+  "N_effective_qubits": 10,
+  "anchor_id": "N10_seed10_continuation_0000_X",
+  "artifact_paths": {
+    "result": "results/level3_continuations/N10_seed10_continuation_0000_X.result.json",
+    "spec": "results/level3_continuations/N10_seed10_continuation_0000_X.spec.json"
+  },
+  "basis": "X",
+  "certificate_intent": "Level-3 indexed anchor certificate",
+  "dimension": 1024,
+  "edge_payload_sha256": "1f9e9d030c64f36c99df23e92ae712abc91ff8f4a3a47dd4b10d0361e3f5968f",
+  "generation_timings_seconds": {
+    "ground_witness": 0.009950600000593113,
+    "matrix_assembly": 0.0033801999998104293,
+    "principal_witness": 0.016129600000567734,
+    "total": 0.11768400000073598
+  },
+  "graph_file_sha256": "4ee4baf35d78d077e6ac490016dd53e6e1701a52ce5cd140ad9d6c925083dbf4",
+  "graph_path": "results/graph_N10_seed10.json",
+  "graph_record_sha256": "3e389115aba8d06a07b60da1b88046e996c4162f30207b837af278999aa7419b",
+  "graph_record_type": "generated_weighted_graph_instance",
+  "graph_schema_version": 2,
+  "ground_witness": {
+    "dtype": "binary64",
+    "path": "results/level3_continuations/N10_seed10_continuation_0000_X.ground.npy",
+    "role": "untrusted Rayleigh-quotient candidate for the E0 upper bound",
+    "sha256": "9c10993cc41a2057fe7368255b50d0ab28661177062fd26f6f529092c6f0047a",
+    "shape": [
+      1024
+    ]
+  },
+  "matrix_semantics": "exact reduced Hamiltonian reconstructed from authoritative schema-2 binary64 edge weights and exact binary64 dyadic s",
+  "n_vertices": 11,
+  "principal_witness": {
+    "dtype": "binary64",
+    "path": "results/level3_continuations/N10_seed10_continuation_0000_X.principal.npy",
+    "role": "untrusted strictly-positive candidate for the comparison principal minor",
+    "sha256": "61f67fc64b484003374692ef5220314c37a58799503e1c3621d2eb22466ecff8",
+    "shape": [
+      1023
+    ]
+  },
+  "record_type": "level3_anchor_spec",
+  "removed_coordinate": 0,
+  "required_exact_proof": {
+    "E0_upper": "U0=q^T H q/(q^T q), evaluated exactly",
+    "E1_lower": "ell1=min_i (M^(p)x)_i/x_i; scaled diagonal dominance and the comparison inequality give lambda_min(H^(p))>=ell1; Cauchy interlacing gives E1(H)>=ell1",
+    "acceptance_tolerances": "none",
+    "gap": "ell1-U0 must be strictly positive as an exact rational"
+  },
+  "s_decimal_input": "0.04798061016834179",
+  "s_hex": "0x1.890ea1f07c224p-5",
+  "schema_version": 1,
+  "scope_statement": "This exact-dyadic anchor is one member of a separate Level-3 continuation manifest.  Acceptance is determined only by the independent continuation verifier.",
+  "seed": 10,
+  "untrusted_scipy_diagnostics": {
+    "ground_candidate_residual": 4.695878825872679e-15,
+    "ground_candidate_value": 0.7499499286543704,
+    "k": 1,
+    "maxiter": 50000,
+    "ncv": 80,
+    "principal_candidate_min_component": 1.3844841424528388e-06,
+    "principal_candidate_residual": 3.634804301634734e-15,
+    "principal_candidate_value": 2.3827901737778228,
+    "solver": "scipy.sparse.linalg.eigsh",
+    "tol": 1e-13,
+    "which": "SA"
+  }
+}

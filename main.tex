@@ -80,7 +80,9 @@
 \maketitle
 
 \begin{abstract}
-We develop an auditable method for propagating lower bounds on the instantaneous spectral gap of affine adiabatic Hamiltonians. Weyl's inequalities yield a shift-invariant Lipschitz constant equal to the spectral width of $H_P-H_I$, improving uncentered norm estimates. An actual-step mark-and-probe continuation conditionally resolves all 20 $N=10$ and 19 of 20 $N=12$ Max-Cut instances. The continuous sweeps rely on floating-point eigenvalue indexing and are therefore conditional. Separately, exact-dyadic comparison-matrix checks certify four selected anchors. The study demonstrates a reproducible finite-size verification workflow; it does not establish asymptotic scaling, speedup, or a fully verified path.
+We develop a method for obtaining lower bounds on the spectral gap of affine adiabatic quantum-computing Hamiltonians. For $H(s)=H_I+s(H_P-H_I)$, we show that Weyl's inequalities propagate a gap bound with a shift-invariant Lipschitz constant given by the spectral width of $H_P-H_I$. This improves on the usual uncentered operator-norm estimate by removing scalar energy shifts, which do not affect the gap. We then use this result in an adaptive continuation scheme that records the interval actually traversed at every step. When a proposed step becomes too small, a mark-and-probe rule tests a larger interval and records it as unresolved whenever the propagated bound is nonpositive.
+
+We apply the method to 40 symmetry-reduced weighted Max-Cut instances. The floating-point continuation runs resolve all 20 $N=10$ paths and 19 of 20 $N=12$ paths, subject to the assumption that the computed Ritz values have the required eigenvalue indices; the remaining $N=12$ run leaves a single interval of width $0.001$ unresolved. To obtain unconditional results, we also give exact-dyadic comparison-matrix certificates for four individual anchors and their associated subintervals. Repeating this exact procedure produces complete certified continuations for three $N=10$ instances (seeds 18, 4, and 10), with overlapping intervals covering the full path $[0,1]$. These benchmarks provide a finite-size test of quantitative gap certification, not evidence for asymptotic gap scaling, adiabatic runtime bounds, or computational speedup.
 \end{abstract}
 
 \section{Introduction and Motivation}
@@ -110,7 +112,9 @@ K_{\mathrm{gap,cert}}\ge W_{\mathrm{exact}}+\Lambda_I\ge K_{\mathrm{gap}}.
 \end{equation}
 Ordinary adaptive steps use $\eta\Delta_{+,\mathrm{lo}}/K_{\mathrm{gap,cert}}$. A floor trigger instead marks the interval, advances by an exponentially growing capped probe, and resolves it only when the bound computed from the actual clipped length is positive.
 
-All matrix inequalities used here are classical. The methodological contribution is their assembly into an explicit continuation and auditable schema-4 record format, together with a finite-size workload assessment. The continuous sweeps use conditionally indexed floating-point anchors and remain Level~2. Four selected exact-dyadic anchors have replayable records and independent Level-3 checks at those points only. The retained Max-Cut paths also have Perron--Frobenius ground-state uniqueness in the interior and are filtered for endpoint nondegeneracy, so the aggregate experiment measures the strength and cost of the lower-bound construction rather than whether the mathematical path is open. The PSD results are supplementary and do not drive the algorithm. The empirical scope is intentionally limited to 20 connected instances at each retained size: it demonstrates the artifact and verification workflow, but does not support asymptotic scaling or uniform runtime claims.
+All matrix inequalities used here are classical. What is new is the verification contract joining them: a scalar-shift-invariant propagation constant, actual-length mark-and-probe records that never silently claim a skipped interval, and independently replayable exact-dyadic anchor payloads with an explicit separation between conditional and exact claims. A conventional floating-point sweep can report small residuals without proving which eigenvalues were found, while an ordinary adaptive log may not contain enough information to reconstruct what was traversed or left unresolved. The present workflow makes those two failure modes auditable and, for the four exact anchors, converts pointwise indexed bounds into rigorously verified continuous subintervals. This is useful to AQC path designers and verification researchers deciding whether numerical evidence supports a quantitative interval bound, where verified eigensolver effort should be spent next, and which portions of a path may safely enter a subsequent schedule or adiabatic-runtime analysis.
+
+The aggregate sweeps use conditionally indexed floating-point anchors and remain Level~2. In contrast, three separately archived $N=10$ continuations use an exact driver anchor, independently checked comparison-matrix anchors, and, where needed, an exact enumerated problem-endpoint anchor; their strictly overlapping Weyl intervals cover the complete path. The retained Max-Cut paths also have Perron--Frobenius ground-state uniqueness in the interior and are filtered for endpoint nondegeneracy. We therefore use them as a controlled validation set: structural arguments supply the qualitative ground truth that the exact-dyadic paths do not close, while continuation tests whether a quantitative and independently auditable lower-bound mechanism recovers positive intervals and at what computational cost. The PSD results are supplementary and do not drive the algorithm. The empirical scope is intentionally limited to 20 connected instances at each retained size, so it does not support asymptotic scaling or uniform runtime claims.
 
 \section{Related Work and Scope}
 This paper positions itself at the intersection of classical matrix analysis and the physical engineering of adiabatic pathways. The literature driving this study can be categorized into three major streams:
@@ -129,7 +133,7 @@ QUBO penalty constructions are surveyed by Lucas \cite{Lucas2014}, while stoquas
 \subsection{Verified Eigensolvers and Eigenvalue Enclosures}
 Verified numerical linear algebra can provide rigorous indexed eigenvalue enclosures using interval arithmetic, variational bounds, or verified inertia calculations \cite{Rump2010Acta,Temple1928,Kato1949,Lehmann1950}. Residual norms from an ordinary floating-point sparse solve provide only spectral-existence information near Ritz values and do not identify eigenvalue indices. The selected replayable exact anchors below instead combine an exact Rayleigh upper bound with a comparison-matrix lower bound for a principal submatrix and Cauchy interlacing. Their exact-dyadic specifications and no-tolerance checker make the pointwise results independently reproducible; this is a classical finite-dimensional route to indexed verification, not a claim that the floating-point continuation has become fully verified.
 
-The individual matrix inequalities used here are classical. The paper's scope is to specialize the shift-invariant Weyl bound to affine AQC gaps, make the continuation and mark-and-probe bookkeeping explicit, and demonstrate both a conditional Level-2 sweep and a small set of separately verified, replayable Level-3 anchors.
+The individual matrix inequalities used here are classical. The paper's scope is to specialize the shift-invariant Weyl bound to affine AQC gaps, make the continuation and mark-and-probe bookkeeping explicit, and demonstrate both a conditional Level-2 sweep and exact-dyadic anchors whose bounds rigorously propagate over nonzero continuous subintervals.
 
 \section{Contributions}
 
@@ -146,7 +150,7 @@ For the affine path $H(s)=H_I+sD$, $D=H_P-H_I$, the paper makes the following li
 
     \item \textbf{Continuation and mark-and-probe bookkeeping.} The schema-4 sweep uses the direct $K_{\mathrm{gap,cert}}$, records proposed, floor-overridden, probe-planned, and actual clipped lengths, and classifies every interval by $B_k>0$. Exponential probing avoids repeated microscopic floor steps without silently claiming the skipped region. A positive floor still gives unconditional and refined termination bounds, including the case $K_{\mathrm{gap,cert}}=0$.
 
-    \item \textbf{Exact indexed anchor verification.} A comparison-matrix theorem combines scaled diagonal dominance, a quadratic-form comparison, Cauchy interlacing, and an exact Rayleigh quotient. Replayable exact rational records and an independent checker apply this result to four selected seed-0 anchors. These pointwise Level-3 results do not verify either continuous sweep.
+    \item \textbf{Exact indexed anchors and complete continuations.} A comparison-matrix theorem combines scaled diagonal dominance, a quadratic-form comparison, Cauchy interlacing, and an exact Rayleigh quotient. Replayable exact rational records and an independent checker apply this result to selected anchors and to three complete $N=10$ paths. Exact driver and, where needed, problem-endpoint anchors together with strictly overlapping propagated intervals verify gap positivity on all of $[0,1]$ for seeds 18, 4, and 10. The aggregate sweeps remain Level~2.
 
 \end{enumerate}
 
@@ -393,7 +397,7 @@ The theorem is a classical comparison-and-interlacing certificate. Its force in 
 
 \section{Computational Results}
 
-We report ordinary floating-point experiments with the continuation rule on finite weighted Erd\H{o}s--R\'{e}nyi Max-Cut instances with $p=0.5$. Sampled graphs are required to be connected, and the generator initially retains instances whose reduced problem Hamiltonian is numerically found to have a nondegenerate ground state. The artifact verifier subsequently enumerates every pinned configuration using exact dyadic arithmetic and confirms endpoint nondegeneracy for all 40 archived instances. The continuous sweeps assess conditional lower-bound envelopes and sparse-eigensolve workload and are not verified numerical certificates. The four selected anchors in Table~\ref{tab:level3-anchors} are separate replayable Level-3 point certificates. The evaluation asks four questions: how much the shift-invariant constant improves the earlier analytic estimates; how many paths the conditional continuation resolves; what sparse-eigensolve workload is observed; and which selected claims can be checked exactly and independently.
+We report ordinary floating-point experiments with the continuation rule on finite weighted Erd\H{o}s--R\'{e}nyi Max-Cut instances with $p=0.5$. Sampled graphs are required to be connected, and the generator initially retains instances whose reduced problem Hamiltonian is numerically found to have a nondegenerate ground state. The artifact verifier subsequently enumerates every pinned configuration using exact dyadic arithmetic and confirms endpoint nondegeneracy for all 40 archived instances. The cohort is a controlled validation set rather than a discovery set: structural positivity supplies the qualitative answer, while the experiment asks whether the quantitative continuation records recover positive lower-bound intervals and what workload they require. The aggregate sweeps assess conditional lower-bound envelopes and are not verified numerical certificates. Alongside them, Tables~\ref{tab:level3-anchors} and \ref{tab:level3-continuations} provide replayable Level-3 point and complete-path certificates. The evaluation asks four questions: how much the shift-invariant constant improves the earlier analytic estimates; how many paths the conditional continuation resolves; what sparse-eigensolve workload is observed; and which selected claims can be checked exactly and independently.
 
 \subsection{Problem Formulation, Symmetry Sectors, and Hamiltonians}
 The physical path is
@@ -441,7 +445,7 @@ H_{P,+}=\sum_{j:(1,j)\in E}w_{1j}\frac{I+Z_{j-1}}{2}
 \end{equation}
 Both $H_{I,+}$ and $H_{P,+}$ are PSD.
 
-There is also a structural positivity fact specific to these benchmarks. In the basis~\eqref{eq:even-basis}, $H_+(s)$ has nonpositive off-diagonal entries for $0\le s<1$, and the single-bit-flip terms connect the full $N$-dimensional hypercube. After a sufficiently large scalar shift, $aI-H_+(s)$ is therefore entrywise nonnegative and irreducible. Perron--Frobenius implies that $H_+(s)$ has a unique ground state with strictly positive basis amplitudes for every $s<1$. The artifact verifier interprets each archived binary64 edge weight exactly, enumerates all $2^N$ pinned configurations, and confirms a unique endpoint minimum with a strictly positive exact second-cost gap for every archived graph. Hence $\Delta_+(1)>0$ for this exact-dyadic cohort; continuity on the compact interval gives $\min_s\Delta_+(s)>0$. Structural positivity therefore already establishes nonclosing for the archived mathematical instances. The continuation experiment instead measures how informative the quantitative Weyl lower bounds are and how much work the chosen rule performs.
+There is also a structural positivity fact specific to these benchmarks. In the basis~\eqref{eq:even-basis}, $H_+(s)$ has nonpositive off-diagonal entries for $0\le s<1$, and the single-bit-flip terms connect the full $N$-dimensional hypercube. After a sufficiently large scalar shift, $aI-H_+(s)$ is therefore entrywise nonnegative and irreducible. Perron--Frobenius implies that $H_+(s)$ has a unique ground state with strictly positive basis amplitudes for every $s<1$. The artifact verifier interprets each archived binary64 edge weight exactly, enumerates all $2^N$ pinned configurations, and confirms a unique endpoint minimum with a strictly positive exact second-cost gap for every archived graph. Hence $\Delta_+(1)>0$ for this exact-dyadic cohort; continuity on the compact interval gives $\min_s\Delta_+(s)>0$. Structural positivity therefore already establishes nonclosing for the archived mathematical instances. This known answer is the ground truth against which we test the more demanding quantitative task: producing replayable numerical lower bounds, identifying exactly which intervals they cover, and recording the work needed to do so.
 
 \subsection{Endpoint-Only and Local Gap Bounds}
 We first form a conditional Weyl envelope from the available endpoint data. Figure~\ref{fig:no_anchors} compares that envelope with a sampled floating-point Ritz-gap curve.
@@ -564,27 +568,57 @@ For clarity, the following certification levels are terminology defined for this
 \item[Level 2: conditional floating-point continuation.] Sparse Ritz values and residual diagnostics supply routine sweep anchors without verified indexing or outward-rounded residual arithmetic.
 \item[Level 3.] \textbf{Replayable exact indexed anchor.} Exact-dyadic Hamiltonian data and witness specifications are checked by an independent exact-arithmetic program that proves the indexed inequalities with no acceptance tolerance.
 \end{description}
-All continuous sweeps and aggregate continuation rows in this paper are Level~2. Only the four listed point anchors in the next subsection are Level~3; they do not constitute a Level-3 continuation.
+All aggregate continuation rows in this paper are Level~2. The four listed anchors in the next subsection are Level~3 point certificates. Their exact bounds propagate to four rigorously verified continuous subintervals. In addition, the three separate records in Table~\ref{tab:level3-continuations} are complete Level~3 continuations across $[0,1]$.
 
-\subsection{Representative Exact-Dyadic Level-3 Anchors}
+\subsection{Exact-Dyadic Level-3 Anchors and Verified Subintervals}
 
 Theorem~\ref{thm:exact-indexed-anchor} is applied to four seed-0 anchors. Archived binary64 edge weights, the binary64 parameter $s$, and both witness vectors are interpreted as exact dyadic rationals. SciPy is used only to propose a ground-state vector $q$, a strictly positive principal-submatrix witness $x$, a coordinate $p$, and a convenient $X$- or $Z$-basis representation; none of those floating-point proposals is trusted. The independent checker reconstructs the exact matrix, verifies $x>0$, evaluates $\ell$ and $U_0$ as rational numbers, and checks every scaled-diagonal-dominance inequality without an acceptance tolerance. A stored specification/result pair and the independent checker make each selected point verification replayable.
+
+These records imply more than isolated point claims. If the exact checker proves $\Delta_+(s_0)\ge\delta>0$, then Eq.~\eqref{eq:lipschitz-gap} and the archived rational inequality $K_{\mathrm{gap,cert}}\ge K_{\mathrm{gap},+}$ give
+\begin{equation}
+\label{eq:exact-anchor-subinterval}
+\Delta_+(s)\ge \delta-K_{\mathrm{gap,cert}}|s-s_0|.
+\end{equation}
+Consequently every closed interval strictly inside $|s-s_0|<\delta/K_{\mathrm{gap,cert}}$ is rigorously certified. Table~\ref{tab:level3-anchors} uses inward-rounded decimal endpoints and conservative decimal floors; all acceptance comparisons are performed on the authoritative rational quantities.
+
+\begin{table}[htbp]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{cccccc}
+\toprule
+$N$ & Binary64 input $s_0$ & Basis & Exact anchor bound $\delta$ & Verified closed subinterval & Interval lower bound \\
+\midrule
+10 & $0.1$ & $X$ & $1.220109841289$ & $[0.069004,\,0.130996]$ & $9.7\times10^{-6}$ \\
+10 & $0.4174116949186277$ & $Z$ & $0.159173111131$ & $[0.413368,\,0.421455]$ & $5.5\times10^{-7}$ \\
+12 & $0.1$ & $X$ & $1.064501314437$ & $[0.080131,\,0.119869]$ & $3.1\times10^{-5}$ \\
+12 & $0.5025125632610975$ & $Z$ & $0.067240247486$ & $[0.501258,\,0.503767]$ & $2.7\times10^{-5}$ \\
+\bottomrule
+\end{tabular}
+\caption{Four seed-0 replayable Level-3 anchors and the continuous subintervals obtained from Eq.~\eqref{eq:exact-anchor-subinterval}. Anchor bounds are decimal approximations to exact rational values $\ell-U_0>0$. Interval endpoints are rounded inward and the final column is rounded downward from the exact propagated minimum. The intervals are rigorous but do not cover either full path.}
+\label{tab:level3-anchors}
+\end{table}
+
+\subsection{Complete Level-3 Continuations for Three \texorpdfstring{$N=10$}{N=10} Instances}
+
+The point certificates above establish the local mechanism. We next apply the same exact checker repeatedly to three archived $N=10$ graphs, selected before this exact run as relatively short conditional sweeps (seeds 18, 4, and 10). Each continuation starts from the analytic reduced-driver identity $\Delta_+(0)=2$. At every subsequent binary64 parameter value, SciPy proposes an $X$- or $Z$-basis witness, but acceptance uses only the exact-dyadic comparison-matrix calculation. The next anchor is placed strictly inside the previously certified union. Thus consecutive propagated intervals overlap by a nonzero exact amount. For seed 10, exact enumeration of the diagonal problem endpoint supplies the final anchor; for seeds 18 and 4, the last comparison-matrix interval already extends beyond $s=1$.
+
+The separate continuation verifier rechecks every witness hash and every exact anchor calculation, reconstructs $K_{\mathrm{gap,cert}}$ from the archived graph record, and rejects unless the union of intervals strictly covers $[0,1]$. Table~\ref{tab:level3-continuations} reports the independently replayed records. The final coverage values are deliberately left unclipped: a value greater than one proves positivity at the physical endpoint rather than only on a half-open interval.
 
 \begin{table}[htbp]
 \centering
 \small
 \begin{tabular}{ccccc}
 \toprule
-$N$ & Seed & Binary64 input $s$ & Basis & Verified gap lower bound \\
+$N$ & Seed & Comparison-matrix anchors & Endpoint closure & Final exact coverage right \\
 \midrule
-10 & 0 & $0.1$ & $X$ & $1.220109841289$ \\
-10 & 0 & $0.4174116949186277$ & $Z$ & $0.159173111131$ \\
-12 & 0 & $0.1$ & $X$ & $1.064501314437$ \\
-12 & 0 & $0.5025125632610975$ & $Z$ & $0.067240247486$ \\
+10 & 18 & 119 & Last comparison interval & $1.026788731492$ \\
+10 & 4  & 186 & Last comparison interval & $1.034263289700$ \\
+10 & 10 & 195 & Exact enumerated $H_{P,+}$ gap & $1.042920856755$ \\
 \bottomrule
 \end{tabular}
-\caption{Four selected replayable Level-3 anchors. The displayed bounds are decimal approximations to authoritative exact rational values $\ell-U_0>0$ stored in the verification records. These pointwise checks do not certify either continuous sweep.}
-\label{tab:level3-anchors}
+\caption{Complete replayable Level-3 continuations. Every displayed path begins with the exact driver anchor $\Delta_+(0)=2$; all intervals overlap strictly and their union covers $[0,1]$. The comparison-anchor counts exclude the analytic endpoint anchors.}
+\label{tab:level3-continuations}
 \end{table}
 
 Figure~\ref{fig:with_anchors} shows how additional Level-2 anchors change the conditional envelope for one instance.
@@ -737,9 +771,9 @@ B_k=\delta_k-K_{\mathrm{gap,cert}}h_k^{\mathrm{act}},
 \end{equation}
 For a floor trigger, a verifier reconstructs the consecutive-trigger exponent $q_k$ from the preceding flags and checks Eq.~\eqref{eq:probe-plan}, the probe cap, and endpoint clipping. For an ordinary step it checks $h_k^{\mathrm{floor}}=h_k^{\mathrm{probe}}=h_k^{\mathrm{prop}}$. These algebraic checks prove propagation only if the anchor inequality $\delta_k\le\Delta_+(s_k)$ is valid.
 
-Each Level-2 log has schema version \SectionSevenResultSchema{} and stores the exact numerator and denominator of $W_{\mathrm{exact}}$, $W_{\mathrm{upper}}$, and $K_{\mathrm{gap,cert}}$, together with the direct derivation in Eq.~\eqref{eq:computational-gap-bounds}; Ritz values and residuals; solver and probe policies; complete interval records; graph hashes; and provenance. The Level-2 logs do not verify their own eigenvalue indices. The four Level-3 anchor specifications and results are separate replayable records containing exact hashes, exact rational $U_0$, $\ell$, and $\ell-U_0$, and all no-tolerance comparison checks. Their scope statements explicitly leave the continuous sweeps at Level~2.
+Each Level-2 log has schema version \SectionSevenResultSchema{} and stores the exact numerator and denominator of $W_{\mathrm{exact}}$, $W_{\mathrm{upper}}$, and $K_{\mathrm{gap,cert}}$, together with the direct derivation in Eq.~\eqref{eq:computational-gap-bounds}; Ritz values and residuals; solver and probe policies; complete interval records; graph hashes; and provenance. The Level-2 logs do not verify their own eigenvalue indices. The four Level-3 anchor specifications and results are separate replayable records containing exact hashes, exact rational $U_0$, $\ell$, and $\ell-U_0$, and all no-tolerance comparison checks. The separate continuation manifest contains the corresponding accepted anchors for seeds 18, 4, and 10; its verifier recomputes every exact inequality and checks strict interval overlap through the endpoint. These records verify Table~\ref{tab:level3-continuations} while leaving the aggregate sweeps at Level~2.
 
-\begin{figure}[htbp] \centering \includegraphics[width=\textwidth]{efficiency_comparison.png} \caption{Sparse-eigensolve counts for the adaptive continuation sweep and a fixed-grid workload reference, over 20 connected instances at each displayed size (seeds 0--19). Bars show medians and error bars show interquartile ranges. The methods do not provide matched guarantees, so the figure reports workload rather than speedup.} \label{fig:efficiency} \end{figure}
+\begin{figure}[htbp] \centering \includegraphics[width=\textwidth]{efficiency_comparison.png} \caption{Secondary workload diagnostic: sparse-eigensolve counts for the adaptive continuation sweep and a fixed-grid reference, over 20 connected instances at each displayed size (seeds 0--19). Bars show medians and error bars show interquartile ranges. Because the outputs and guarantees are unmatched, this figure is not evidence of speedup or superior certification effectiveness.} \label{fig:efficiency} \end{figure}
 
 \begin{figure}[htbp] \centering \includegraphics[width=\textwidth]{grid_density_vs_gap.png} \caption{Adaptive and fixed-grid solve locations relative to a sampled floating-point reduced-sector Ritz-gap curve $\Delta_+$ for the connected $N=10$, seed-0 instance. The plot visualizes placement only; it is not a verified gap plot.} \label{fig:grid_N10} \end{figure}
 
@@ -753,7 +787,7 @@ Figures~\ref{fig:grid_N10} and \ref{fig:grid_N12} visualize the solve locations 
 \end{figure}
 
 
-The adaptive and fixed-grid constructions distribute evaluations differently. In the regenerated sample, the adaptive call count can be smaller or larger than the selected fixed-grid workload; narrow sampled gaps can lead to many adaptive calls.
+The adaptive and fixed-grid constructions distribute evaluations differently. In the regenerated sample, the adaptive call count can be smaller or larger than the selected fixed-grid workload; narrow sampled gaps can lead to many adaptive calls. We therefore treat this comparison only as descriptive implementation context. A claim about relative effectiveness would require a matched target such as equal certified coverage, equal lower-bound margin, or coverage as a function of eigensolve or matvec budget.
 
 \subsubsection{Experimental Specification and Setup}
 We assess the lower-bound output and workload of Algorithm~1 under the following setup:
@@ -819,9 +853,9 @@ The data show instance-dependent workload rather than a uniform speedup. The sam
 
 
 \subsection{Scope and Limitations}
-The certification levels used here are local labels for the evidence recorded by this study. All continuous sweeps are Level~2 because ordinary sparse Ritz calculations do not independently certify eigenvalue indexing or outward-rounded residual arithmetic. Only the four points in Table~\ref{tab:level3-anchors} are Level~3 exact-dyadic certificates, and they do not establish a verified continuous path.
+The certification levels used here are local labels for the evidence recorded by this study. The 40 aggregate sweeps are Level~2 because ordinary sparse Ritz calculations do not independently certify eigenvalue indexing or outward-rounded residual arithmetic. The four points in Table~\ref{tab:level3-anchors} are Level~3 exact-dyadic certificates and rigorously verify the displayed continuous subintervals. Separately, the three paths in Table~\ref{tab:level3-continuations} are complete Level~3 continuations: exact anchors and strict interval overlap certify their full domains.
 
-The 40-instance cohort contains only $N=10$ and $N=12$ problems and therefore supports neither asymptotic scaling claims nor conclusions about physically large systems. The fixed-grid and adaptive counts do not provide matched guarantees, so their comparison measures workload rather than speedup. One $N=12$ run retains a width-$0.001$ unresolved interval. Finally, Perron--Frobenius irreducibility and exact endpoint enumeration already establish nondegeneracy for the retained class; the experiment measures quantitative bound strength and cost, not discovery of gap positivity.
+The 40-instance cohort contains only $N=10$ and $N=12$ problems and therefore supports neither asymptotic scaling claims nor conclusions about physically large systems. The fixed-grid and adaptive counts do not provide matched guarantees, so their comparison measures workload rather than speedup. One $N=12$ run retains a width-$0.001$ unresolved interval. Finally, Perron--Frobenius irreducibility and exact endpoint enumeration already establish nondegeneracy for the retained class. This makes the cohort a controlled validation set for quantitative bound strength, coverage, and cost, not evidence that the method discovered gap positivity in a class where it was structurally unknown.
 
 \subsection{Integral-Based Cost Model}
 Ignoring endpoint clipping, floor overrides, and integer rounding, the implemented rule suggests the continuum approximation
@@ -849,9 +883,9 @@ Several extensions would make the framework more useful.
     \end{equation}
     a local certificate should use the spectral width of the relevant path increment or derivative, not its uncentered norm. Such an extension must account for varying coefficients and cannot infer catalyst effectiveness from PSD monotonicity alone.
 
-    \item \textbf{Class-specific structure.} Other graph ensembles, 3-SAT, and Subset Sum may have symmetries or positivity properties that establish nonclosing independently of continuation. Future experiments should separate such structural results from the quantitative question of how tight propagated lower bounds are.
+    \item \textbf{Benchmarks without structural ground truth.} Other graph ensembles, non-stoquastic paths, 3-SAT, and Subset Sum should be used to test cases in which Perron--Frobenius positivity does not already settle nonclosing. Such a study is outside the present computational scope because every claimed indexed anchor would require interval, inertia, or exact verification in a substantially larger benchmark campaign. Structural results should still be reported separately from the quantitative tightness of propagated bounds.
 
-    \item \textbf{Verified and quantum-assisted anchors.} The four replayable exact-dyadic checks demonstrate Level~3 verification at selected points. Extending Level~3 to a full continuation would require independently verified indexed anchors at every requested location, for example through verified inertia or interval eigensolvers coupled to the same interval records. At larger $N$, phase estimation or quantum subspace/Krylov methods \cite{Parrish2019, Stair2020} might supply anchor information, but state-preparation cost, statistical uncertainty, and eigenvalue indexing would all need explicit validation.
+    \item \textbf{Verified and quantum-assisted anchors.} Three complete $N=10$ continuations now demonstrate that enough independently verified anchors can cover $[0,1]$, but their hundreds of anchors make the current comparison-matrix route expensive. Verified inertia or interval eigensolvers could produce stronger indexed enclosures and reduce that workload. At larger $N$, phase estimation or quantum subspace/Krylov methods \cite{Parrish2019, Stair2020} might supply anchor information, but state-preparation cost, statistical uncertainty, and eigenvalue indexing would all need explicit validation.
 \end{enumerate}
 
 \section{Conclusions}
@@ -865,11 +899,11 @@ not, in general, the larger comparison value $2\norm{D}_2$. Using a valid upper 
 
 The regenerated sparse Max-Cut sweeps remain conditional Level-2 floating-point assessments: all 20 $N=10$ runs and 19 of 20 $N=12$ runs are conditionally resolved, with one width-$0.001$ unresolved interval for $N=12$, seed 13. Perron--Frobenius irreducibility gives interior ground-state uniqueness for these reduced stoquastic paths, while exact dyadic enumeration independently confirms endpoint nondegeneracy for all 40 archived graphs. Accordingly, the aggregate continuation results quantify lower-bound conservatism and workload rather than establish a previously unknown positivity property or a speedup.
 
-Four selected seed-0 anchors do have replayable Level-3 exact-dyadic records: an independent no-tolerance checker proves indexed lower bounds by comparison matrices, interlacing, and exact Rayleigh quotients. These pointwise certificates do not make either continuation Level~3. A full Level-3 sweep would require independently checkable indexed enclosures at every continuation anchor. The present contribution remains a transparent assembly of classical inequalities and auditable bookkeeping, not a new matrix inequality or a verified many-body gap computation.
+Four selected seed-0 anchors have replayable Level-3 exact-dyadic records: an independent no-tolerance checker proves indexed lower bounds by comparison matrices, interlacing, and exact Rayleigh quotients. Propagating those rational bounds with the archived rational spectral-width certificates rigorously verifies four continuous subintervals. More substantially, the same exact mechanism now produces complete Level~3 continuations for $N=10$ seeds 18, 4, and 10, with 119, 186, and 195 comparison-matrix anchors, respectively, plus exact analytic endpoint information. Their interval unions strictly cover $[0,1]$. This is a finite-size demonstration, not a verified many-body minimum-gap scaling result, but it changes the paper's status from a framework for future full verification to a framework that has completed three independently replayable paths.
 
 \section{Accessibility of the Code and Data}
 
-The code and data are publicly available at \url{https://github.com/TiagoVerissimo/Bounding_Spectral_Gaps}. The repository includes the schema-4 continuation records and generated \path{results/section7_summary.tex}, together with the selected Level-3 exact-dyadic specifications, exact result records, and independent checker. Hashes and exact rational payloads make the four point anchors replayable; the accompanying scope metadata keeps the continuous sweeps at Level~2. The repository is distributed under the MIT License and its README records the reference environment plus commands for unit tests, deterministic-summary checks, read-only artifact verification, exact-anchor verification, figure regeneration, and full numerical reproduction. A versioned archival release should be cited when one is created.
+The code and data are publicly available at \url{https://github.com/TiagoVerissimo/Bounding_Spectral_Gaps}. The repository includes the schema-4 continuation records and generated \path{results/section7_summary.tex}, together with selected Level-3 anchor records, the complete $N=10$ continuation manifest, independent anchor and continuation checkers, and exact-rational subinterval replay checks. Hashes and exact rational payloads make the local anchors and complete paths replayable; the accompanying scope metadata keeps the aggregate continuous sweeps at Level~2. The repository is distributed under the MIT License and its README records the reference environment plus commands for unit tests, deterministic-summary checks, read-only artifact verification, exact-anchor, subinterval, and complete-continuation verification, figure regeneration, and full numerical reproduction. A versioned archival release should be cited when one is created.
 
 
 \appendix

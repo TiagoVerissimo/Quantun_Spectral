@@ -25,7 +25,9 @@ The primary archive contains exactly **40 instances**:
 
 The aggregate CSV and ordinary sparse-eigensolver records are **Level 2 conditional numerical artifacts**. Ritz residuals are recorded, but eigenvalue indexing and outward rounding are not independently verified. The selected `N=10`, seed-0 dense-grid comparison is also a Level 2 consistency check; dense floating-point sampling does not make it Level 3.
 
-The optional `results/level3/manifest.json` bundle covers exactly four representative exact-dyadic anchors: two for `N=10`, seed 0, and two for `N=12`, seed 0. A passing anchor is **Level 3 only for the exact-dyadic Hamiltonian and parameter recorded in its specification**. It does not upgrade either continuous sweep or the other aggregate rows. When the manifest is present, `verify_artifacts.py` checks every exact hash and invokes `verify_level3_anchors.py` in read-only mode for the exact rational certificate obligations.
+The optional `results/level3/manifest.json` bundle covers exactly four representative exact-dyadic anchors: two for `N=10`, seed 0, and two for `N=12`, seed 0. A passing anchor is **Level 3 only for the exact-dyadic Hamiltonian and parameter recorded in its specification**. Combining those point bounds with the archived exact-rational spectral-width certificates rigorously covers the four subintervals reported in the manuscript, but it does not upgrade either full continuous sweep or the other aggregate rows. When the manifest is present, `verify_artifacts.py` checks every exact hash and invokes `verify_level3_anchors.py` in read-only mode for the exact rational certificate obligations.
+
+The separate `results/level3_continuations/manifest.json` contains complete exact-dyadic Level 3 continuations for `N=10` seeds 18, 4, and 10. Each starts from the exact reduced-driver gap, uses independently checked comparison-matrix anchors with strictly overlapping Weyl intervals, and covers `[0,1]`; seed 10 uses an exact enumerated problem-endpoint anchor for its final overlap. These three records are distinct from the 40 aggregate Level 2 sweeps.
 
 ## Repository structure
 
@@ -37,7 +39,9 @@ The optional `results/level3/manifest.json` bundle covers exactly four represent
 - `scratch/plot_grid_vs_gap.py`: generates the `N=10` and `N=12` seed-0 solve-density figures from archived graph records.
 - `test_main.py`: exercises the analytic gap-width bound and continuation edge cases, including upward rounding, floor probes, invalid parameters, and zero-diameter paths.
 - `verify_artifacts.py`: cross-checks the CSV, run manifest, graph metadata and hashes, summaries, selected Level 2 interval algebra, required figures, and any optional Level 3 manifest; it also exactly enumerates every pinned endpoint configuration to prove nondegeneracy for all 40 graph-schema-2 records.
-- `generate_level3_anchors.py` and `verify_level3_anchors.py`: generate untrusted witnesses and independently verify the four selected exact-dyadic Level 3 anchor certificates; they do not certify a continuous sweep.
+- `generate_level3_anchors.py` and `verify_level3_anchors.py`: generate untrusted witnesses and independently verify the four selected exact-dyadic Level 3 anchor certificates.
+- `verify_level3_intervals.py`: combines the passing exact anchor bounds with the archived exact-rational spectral-width certificates and replays the four rigorous continuous-subinterval claims reported in the manuscript; these intervals do not cover a full sweep.
+- `generate_level3_continuations.py` and `verify_level3_continuations.py`: generate and independently replay complete Level 3 continuations for selected `N=10` paths. The verifier reruns every exact anchor calculation and checks strict interval coverage of `[0,1]`.
 - `maxcut_gap_benchmark.py`: a separate exploratory benchmark and shared Hamiltonian library; it does not generate the Section 7 archive.
 
 ## Reference environment
@@ -77,6 +81,8 @@ It fails on an incomplete cohort, a result schema other than version 4, a graph 
 
 ```bash
 python verify_level3_anchors.py --no-write-results
+python verify_level3_intervals.py
+python verify_level3_continuations.py --no-write-results
 ```
 
 To check only that the deterministic summaries match the CSV without rewriting them:
@@ -118,6 +124,9 @@ python plot_new_results.py
 python generate_updated_comparison.py
 python scratch/plot_grid_vs_gap.py
 python generate_level3_anchors.py
+python verify_level3_intervals.py
+python generate_level3_continuations.py
+python verify_level3_continuations.py
 python verify_artifacts.py
 ```
 
