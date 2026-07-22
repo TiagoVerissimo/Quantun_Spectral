@@ -21,7 +21,7 @@ OUTPUT_PATH = PROJECT_ROOT / "results" / "section7_summary.json"
 TEX_OUTPUT_PATH = PROJECT_ROOT / "results" / "section7_summary.tex"
 EXPECTED_SCHEMA_VERSION = 4
 EXPECTED_GRAPH_SCHEMA_VERSION = 2
-EXPECTED_NS = (10, 12)
+EXPECTED_NS = (10, 12, 14)
 EXPECTED_SEEDS = tuple(range(20))
 EXPECTED_ROW_COUNT = len(EXPECTED_NS) * len(EXPECTED_SEEDS)
 _FLOAT_REL_TOL = 1e-12
@@ -453,7 +453,7 @@ def validate_rows(
         missing = sorted(expected_keys - actual_keys)
         unexpected = sorted(actual_keys - expected_keys)
         raise ArtifactValidationError(
-            f"cohort must be N=10/12 with seeds 0-19; "
+            f"cohort must be N={EXPECTED_NS} with seeds 0-19; "
             f"missing={missing}, unexpected={unexpected}"
         )
 
@@ -494,7 +494,8 @@ def validate_rows(
             )
         if int(row["graph_archive_records"]) != EXPECTED_ROW_COUNT:
             raise ArtifactValidationError(
-                f"{label}: graph archive must contain 40 records"
+                f"{label}: graph archive must contain "
+                f"{EXPECTED_ROW_COUNT} records"
             )
         if int(row["graph_schema_version"]) != EXPECTED_GRAPH_SCHEMA_VERSION:
             raise ArtifactValidationError(
@@ -652,9 +653,13 @@ def validate_rows(
         source_driver_hashes.add(str(row["source_driver_sha256"]))
 
     if len(graph_hashes) != EXPECTED_ROW_COUNT:
-        raise ArtifactValidationError("all 40 graph-record hashes must be unique")
+        raise ArtifactValidationError(
+            f"all {EXPECTED_ROW_COUNT} graph-record hashes must be unique"
+        )
     if len(edge_hashes) != EXPECTED_ROW_COUNT:
-        raise ArtifactValidationError("all 40 edge-payload hashes must be unique")
+        raise ArtifactValidationError(
+            f"all {EXPECTED_ROW_COUNT} edge-payload hashes must be unique"
+        )
     for label, values in (
         ("graph_archive_path", archive_paths),
         ("graph_archive_sha256", archive_hashes),
@@ -951,7 +956,7 @@ def render_tex(report: Mapping[str, Any]) -> bytes:
             f"{N} & {weights['W_model_mean']:.6f} & "
             f"{weights['W_exact_mean']:.6f} & "
             f"{weights['W_upper_mean']:.6f} & "
-            f"{weights['upward_rounded_instances']}/20 \\\\"
+            f"{weights['upward_rounded_instances']}/{len(EXPECTED_SEEDS)} \\\\"
         )
         gap_rows.append(
             f"{N} & {gap['spectral_diameter_estimate_mean']:.2f} & "
@@ -966,7 +971,8 @@ def render_tex(report: Mapping[str, Any]) -> bytes:
             f"{gap['mean_reduction_vs_uncentered_percent']:.2f}\\% \\\\"
         )
         global_rows.append(
-            f"{N} & {global_conditional['resolved_instances']}/20 & "
+            f"{N} & {global_conditional['resolved_instances']}/"
+            f"{len(EXPECTED_SEEDS)} & "
             f"{_format_scientific(global_conditional['lower_bound_mean'])} & "
             f"{_format_scientific(global_conditional['lower_bound_min'])} & "
             f"{_format_scientific(global_conditional['lower_bound_max'])} \\\\"
@@ -985,7 +991,8 @@ def render_tex(report: Mapping[str, Any]) -> bytes:
             f"${solves['relative_count_change_max_percent']:.2f}\\%$ \\\\"
         )
         unresolved_rows.append(
-            f"{N} & ${unresolved['full_path_resolved']}/20$ & "
+            f"{N} & ${unresolved['full_path_resolved']}/"
+            f"{len(EXPECTED_SEEDS)}$ & "
             f"{unresolved['mean_components']:.2f} & "
             f"{_format_scientific(unresolved['mean_width'])} & "
             f"{_format_scientific(unresolved['maximum_width'])} \\\\"

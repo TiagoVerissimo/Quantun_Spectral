@@ -213,20 +213,128 @@
       "upward_rounded_instances": 20
     }
   },
+  "14": {
+    "all_connected": true,
+    "endpoint_coverage": {
+      "psd_floor_poly_positive_fraction_mean": 0.07363184079601989,
+      "psd_floor_positive_fraction_mean": 0.1310945273631841,
+      "weyl_positive_fraction_mean": 0.042786069651741296
+    },
+    "gap_lipschitz": {
+      "K_gap_cert_mean": 66.23836562232103,
+      "K_gap_cert_population_sd": 4.385756805644907,
+      "K_gap_cert_upward_rounded_instances": 8,
+      "K_gap_cert_upward_rounding_max": 7.105427357601002e-15,
+      "K_gap_cert_upward_rounding_mean": 2.842170943040401e-15,
+      "cert_over_diameter_estimate_max": 1.719401974382528,
+      "cert_over_diameter_estimate_mean": 1.6542909086917614,
+      "cert_over_diameter_estimate_min": 1.5522387370426867,
+      "conventional_uncentered_bound_definition": "2*max(W_upper,Lambda_I)",
+      "conventional_uncentered_bound_mean": 104.47673124464204,
+      "mean_reduction_vs_previous_analytic_percent": 50.746719099974186,
+      "mean_reduction_vs_uncentered_percent": 36.50763707910156,
+      "previous_analytic_bound_definition": "2*(W_upper+n_vertices)",
+      "previous_analytic_bound_mean": 134.47673124464205,
+      "spectral_diameter_estimate_mean": 40.04328415186576,
+      "spectral_diameter_estimate_population_sd": 2.523749038486404
+    },
+    "global_conditional": {
+      "lower_bound_max": 0.03762370249757824,
+      "lower_bound_mean": 0.019826328688519967,
+      "lower_bound_min": 0.0034126100387118913,
+      "raw_lower_bound_mean": 0.019826328688519967,
+      "resolved_instances": 20,
+      "resolved_lower_bound_max": 0.03762370249757824,
+      "resolved_lower_bound_mean": 0.019826328688519967,
+      "resolved_lower_bound_min": 0.0034126100387118913,
+      "unresolved_instances": 0
+    },
+    "instances": 20,
+    "observed_timing_seconds": {
+      "mean": 450.936707675457,
+      "median": 424.06014490127563,
+      "population_sd": 171.10667936065505
+    },
+    "seeds": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19
+    ],
+    "solve_counts": {
+      "adaptive_mean": 232.75,
+      "adaptive_median": 213.0,
+      "adaptive_population_sd": 135.37868185205528,
+      "largest_adaptive_call_counts": [
+        {
+          "adaptive_calls": 772,
+          "seed": 7
+        },
+        {
+          "adaptive_calls": 297,
+          "seed": 19
+        }
+      ],
+      "relative_count_change_max_percent": 55.93869731800766,
+      "relative_count_change_mean_percent": 11.815783457208756,
+      "relative_count_change_median_percent": 20.413877054169202,
+      "relative_count_change_min_percent": -202.7450980392157,
+      "relative_count_change_population_sd_percent": 53.71194566929349,
+      "uniform_mean": 266.3,
+      "uniform_median": 262.0,
+      "uniform_population_sd": 17.58721126273293
+    },
+    "unresolved": {
+      "full_path_resolved": 20,
+      "globally_conditionally_resolved": 20,
+      "maximum_width": 0.0,
+      "mean_components": 0.0,
+      "mean_width": 0.0
+    },
+    "weights": {
+      "W_exact_mean": 52.23836562232101,
+      "W_exact_mean_rational": {
+        "denominator": 180143985094819840,
+        "numerator": 9410427358045145533
+      },
+      "W_model_mean": 52.23836562232101,
+      "W_upper_mean": 52.23836562232102,
+      "W_upper_minus_W_exact_max": 6.8833827526759706e-15,
+      "W_upper_minus_W_exact_mean": 3.569367024169878e-15,
+      "upward_rounded_instances": 19
+    }
+  },
   "_metadata": {
     "N_values": [
       10,
-      12
+      12,
+      14
     ],
     "csv_path": "section7_results.csv",
-    "csv_sha256": "b73a094cf3b5c612d6b1b488311a4da6c1f9c7a515cd23648a9939cb52c8c901",
+    "csv_sha256": "6650031031511cc1c9f3821390bf54ca8e5236868f80470cb823a89b9113b6c9",
     "graph_archive_path": "results/graph_instances.jsonl",
-    "graph_archive_records": 40,
-    "graph_archive_sha256": "0325f5fcc2ea08ef2e3719af0d5210410a8f886abac26c005f0f18f0361bc4d8",
+    "graph_archive_records": 60,
+    "graph_archive_sha256": "facfb52fe0c9bb11ef284df29b83a96efda293596478b51690e8793b4b10bbd6",
     "graph_schema_version": 2,
     "result_schema_version": 4,
     "rounding_policy": "W_upper and K_gap_cert are the least binary64 upper bounds of their recorded exact dyadic rational inputs",
-    "rows": 40,
+    "rows": 60,
     "seeds": [
       0,
       1,

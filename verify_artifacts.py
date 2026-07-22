@@ -47,6 +47,7 @@ _REQUIRED_FIGURES = (
     "certificate_coverage.png",
     "grid_density_vs_gap.png",
     "grid_density_vs_gap_N12.png",
+    "grid_density_vs_gap_N14.png",
 )
 
 
@@ -172,7 +173,9 @@ def _verify_run_manifest(
     if not isinstance(archive_entry, dict):
         raise ArtifactVerificationError("run manifest has no graph_archive object")
     if archive_entry.get("records") != EXPECTED_ROW_COUNT:
-        raise ArtifactVerificationError("graph archive manifest must report 40 records")
+        raise ArtifactVerificationError(
+            f"graph archive manifest must report {EXPECTED_ROW_COUNT} records"
+        )
     archive_path = _project_path(
         archive_entry.get("path"), "manifest graph archive path"
     )
@@ -198,6 +201,7 @@ def _verify_run_manifest(
     source_files = {
         "main.py": PROJECT_ROOT / "main.py",
         "maxcut_gap_benchmark.py": PROJECT_ROOT / "maxcut_gap_benchmark.py",
+        "extend_level2_n14.py": PROJECT_ROOT / "extend_level2_n14.py",
     }
     for name, path in source_files.items():
         expected = _require_sha256(
@@ -556,7 +560,8 @@ def _verify_graph_archive(
     lines = archive_payload.splitlines()
     if len(lines) != EXPECTED_ROW_COUNT:
         raise ArtifactVerificationError(
-            f"graph archive must contain 40 lines, found {len(lines)}"
+            f"graph archive must contain {EXPECTED_ROW_COUNT} lines, "
+            f"found {len(lines)}"
         )
 
     records: dict[tuple[int, int], dict[str, Any]] = {}
@@ -589,7 +594,9 @@ def _verify_graph_archive(
         (N, seed) for N in EXPECTED_NS for seed in EXPECTED_SEEDS
     }
     if set(records) != expected_keys:
-        raise ArtifactVerificationError("graph archive cohort is not N=10/12, seeds 0-19")
+        raise ArtifactVerificationError(
+            f"graph archive cohort is not N={EXPECTED_NS}, seeds 0-19"
+        )
     if archive_payload != b"".join(canonical_payload_parts):
         raise ArtifactVerificationError(
             "graph archive is not in canonical sorted-key JSONL form"
@@ -598,7 +605,6 @@ def _verify_graph_archive(
         raise ArtifactVerificationError("graph archive records are not sorted by (N, seed)")
 
     row_by_key = {(int(row["N"]), int(row["seed"])): row for row in rows}
-    level3_overrides: set[Path] = set()
     for key, record in records.items():
         row = row_by_key[key]
         if row["graph_record_sha256"] != record["graph_record_sha256"]:
@@ -671,13 +677,10 @@ def _verify_graph_archive(
         )
         individual = _load_json(individual_path, f"graph {key} record")
         if individual != record:
-            if individual.get("record_type") == "exact_dyadic_level3_graph":
-                level3_overrides.add(individual_path)
-            else:
-                raise ArtifactVerificationError(
-                    f"graph {key}: individual record differs from JSONL archive"
-                )
-    return records, level3_overrides
+            raise ArtifactVerificationError(
+                f"graph {key}: individual record differs from JSONL archive"
+            )
+    return records
 
 
 def _verify_summary() -> None:
@@ -1040,6 +1043,7 @@ def _verify_required_figures(rows: list[dict[str, Any]]) -> None:
         "comparison_updated_N10_anchors.png": (10, 0),
         "grid_density_vs_gap.png": (10, 0),
         "grid_density_vs_gap_N12.png": (12, 0),
+        "grid_density_vs_gap_N14.png": (14, 0),
     }
     for filename in _REQUIRED_FIGURES:
         metadata = _png_text_metadata(RESULTS_DIR / filename)
@@ -1060,215 +1064,26 @@ def _verify_required_figures(rows: list[dict[str, Any]]) -> None:
             )
 
 
-def _level3_manifest_paths() -> list[Path]:
-    manifests = []
-    if not RESULTS_DIR.exists():
-        return manifests
-    for path in RESULTS_DIR.rglob("*.json"):
-        relative = str(path.relative_to(RESULTS_DIR)).lower()
-        normalized = re.sub(r"[^a-z0-9]", "", relative)
-        if "level3" in normalized and "manifest" in normalized:
-            manifests.append(path)
-    return sorted(set(manifests))
-
-
-def _hash_references(payload: object) -> list[tuple[str, str]]:
-    references: list[tuple[str, str]] = []
-    if isinstance(payload, dict):
-        path_keys = [key for key in payload if key == "path" or key.endswith("_path")]
-        for path_key in path_keys:
-            stem = path_key[:-5] if path_key.endswith("_path") else ""
-            candidates = (
-                "sha256",
-                f"{stem}_sha256" if stem else "",
-                "file_sha256",
-                "record_sha256",
-            )
-            for hash_key in candidates:
-                if hash_key and hash_key in payload:
-                    path_value = payload[path_key]
-                    hash_value = payload[hash_key]
-                    if isinstance(path_value, str) and isinstance(hash_value, str):
-                        references.append((path_value, hash_value))
-                        break
-        for value in payload.values():
-            references.extend(_hash_references(value))
-    elif isinstance(payload, list):
-        for value in payload:
-            references.extend(_hash_references(value))
-    return references
-
-
-def _verify_level3_manifests(
-    graph_records: Mapping[tuple[int, int], Mapping[str, Any]],
-    level3_overrides: set[Path],
-) -> int:
-    manifests = _level3_manifest_paths()
-    verified_paths: set[Path] = set()
-    for path in manifests:
-        manifest = _load_json(path, f"Level-3 manifest {path.name}")
-        if not isinstance(manifest, dict):
-            raise ArtifactVerificationError(
-                f"Level-3 manifest {path.name} must be an object"
-            )
-        if "schema_version" in manifest and not isinstance(
-            manifest["schema_version"], int
-        ):
-            raise ArtifactVerificationError(
-                f"Level-3 manifest {path.name} has an invalid schema_version"
-            )
-        if "manifest_sha256" in manifest:
-            expected = _require_sha256(
-                manifest["manifest_sha256"], f"{path.name} manifest hash"
-            )
-            hash_input = {
-                key: value
-                for key, value in manifest.items()
-                if key != "manifest_sha256"
-            }
-            if _sha256_bytes(_canonical_json_bytes(hash_input)) != expected:
-                raise ArtifactVerificationError(
-                    f"Level-3 manifest self-hash mismatch: {path.name}"
-                )
-
-        checked = 0
-        record_type = manifest.get("record_type")
-        if record_type == "level3_anchor_manifest":
-            try:
-                import verify_level3_anchors
-            except ImportError as exc:
-                raise ArtifactVerificationError(
-                    "Level-3 anchor manifest is present but "
-                    "verify_level3_anchors.py cannot be imported"
-                ) from exc
-            if not verify_level3_anchors.verify_manifest(
-                path,
-                write_results=False,
-                verbose=False,
-            ):
-                raise ArtifactVerificationError(
-                    f"exact Level-3 verification failed for {path.name}"
-                )
-            checked += 1
-
-        source_hashes = manifest.get("source_hashes")
-        if isinstance(source_hashes, dict):
-            for source_name, digest_value in source_hashes.items():
-                if not isinstance(source_name, str) or Path(source_name).name != source_name:
-                    raise ArtifactVerificationError(
-                        f"{path.name}: invalid Level-3 source path {source_name!r}"
-                    )
-                digest = _require_sha256(
-                    digest_value, f"{path.name} source hash for {source_name}"
-                )
-                source_path = PROJECT_ROOT / source_name
-                if not source_path.is_file() or sha256_path(source_path) != digest:
-                    raise ArtifactVerificationError(
-                        f"{path.name}: Level-3 source hash mismatch for {source_name}"
-                    )
-                checked += 1
-
-        seen_references = set()
-        for relative_path, digest_value in _hash_references(manifest):
-            reference = (relative_path, digest_value)
-            if reference in seen_references:
-                continue
-            seen_references.add(reference)
-            digest = _require_sha256(
-                digest_value, f"Level-3 manifest hash for {relative_path}"
-            )
-            artifact_path = _project_path(
-                relative_path, f"Level-3 artifact path in {path.name}"
-            )
-            if not artifact_path.is_file():
-                raise ArtifactVerificationError(
-                    f"missing Level-3 artifact: {relative_path}"
-                )
-            if sha256_path(artifact_path) != digest:
-                raise ArtifactVerificationError(
-                    f"Level-3 artifact SHA-256 mismatch: {relative_path}"
-                )
-            verified_paths.add(artifact_path)
-            checked += 1
-
-        for key_name in ("source_csv_sha256", "csv_sha256"):
-            if key_name in manifest:
-                expected = _require_sha256(
-                    manifest[key_name], f"{path.name} {key_name}"
-                )
-                if sha256_path(RESULTS_PATH) != expected:
-                    raise ArtifactVerificationError(
-                        f"Level-3 manifest {path.name} CSV hash mismatch"
-                    )
-                checked += 1
-
-        selected = manifest.get("selected_instances")
-        if isinstance(selected, list):
-            for item in selected:
-                if not isinstance(item, dict):
-                    raise ArtifactVerificationError(
-                        f"{path.name}: selected_instances entries must be objects"
-                    )
-                if {"N", "seed", "graph_record_sha256"} <= set(item):
-                    key = (
-                        _as_int(item["N"], "Level-3 selected N"),
-                        _as_int(item["seed"], "Level-3 selected seed"),
-                    )
-                    if key not in graph_records:
-                        raise ArtifactVerificationError(
-                            f"{path.name}: unknown selected instance {key}"
-                        )
-                    expected = _require_sha256(
-                        item["graph_record_sha256"],
-                        f"{path.name} graph hash for {key}",
-                    )
-                    if graph_records[key]["graph_record_sha256"] != expected:
-                        raise ArtifactVerificationError(
-                            f"{path.name}: selected graph hash mismatch for {key}"
-                        )
-                    checked += 1
-
-        if checked == 0:
-            raise ArtifactVerificationError(
-                f"Level-3 manifest {path.name} contains no checkable SHA-256 references"
-            )
-    unverified_overrides = level3_overrides - verified_paths
-    if unverified_overrides:
-        names = ", ".join(
-            str(path.relative_to(PROJECT_ROOT))
-            for path in sorted(unverified_overrides)
-        )
-        raise ArtifactVerificationError(
-            "individual aggregate graph paths were replaced by Level-3 records "
-            f"that are not hash-linked by a Level-3 manifest: {names}"
-        )
-    return len(manifests)
-
-
 def verify() -> int:
     rows = load_rows(RESULTS_PATH)
     _, archive_path = _verify_run_manifest(rows)
-    graph_records, level3_overrides = _verify_graph_archive(rows, archive_path)
+    graph_records = _verify_graph_archive(rows, archive_path)
     _verify_summary()
     _verify_conditional_log(rows, graph_records)
     _verify_required_figures(rows)
-    level3_count = _verify_level3_manifests(
-        graph_records, level3_overrides
-    )
 
     print("Verified schema-v4 CSV cohort and run manifest.")
     print(
-        "Verified all 40 graph-schema-2 records, metadata, exact dyadic "
+        f"Verified all {EXPECTED_ROW_COUNT} graph-schema-2 records, metadata, exact dyadic "
         "rounding, and SHA-256 links."
     )
-    print("Verified exact endpoint nondegeneracy for all 40 graph-schema-2 records.")
+    print(
+        "Verified exact endpoint nondegeneracy for all "
+        f"{EXPECTED_ROW_COUNT} graph-schema-2 records."
+    )
     print("Verified deterministic JSON/TeX summary regeneration.")
     print("Verified selected N=10, seed-0 Level-2 continuation algebra.")
     print(f"Verified {len(_REQUIRED_FIGURES)} required manuscript figures.")
-    if level3_count:
-        print(f"Verified exact hashes in {level3_count} optional Level-3 manifest(s).")
-    else:
-        print("No optional Level-3 manifest is present; the ensemble remains Level-2.")
     if (RESULTS_DIR / "runtime_scaling.png").exists():
         print(
             "Warning: legacy results/runtime_scaling.png is present but is not "

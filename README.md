@@ -1,8 +1,28 @@
 # Bounding Spectral Gaps
 
-This repository contains the code and archived artifacts for the computational study in *Shift-Invariant Spectral-Gap Continuation with Replayable Exact-Dyadic Certificates*.
+This repository accompanies *Shift-Invariant Spectral-Gap Continuation from Local Bounds*. It contains the implementation, numerical data, figures, and verification tools used to study spectral-gap bounds for adiabatic quantum-computing Hamiltonians.
 
-The Section 7 benchmark applies shift-invariant Weyl continuation to symmetry-reduced weighted Max-Cut Hamiltonians. Archived binary64 edge weights are interpreted as exact dyadic rationals. If `W_exact` is their exact rational sum, then `W_upper` is the least binary64 value satisfying `W_upper >= W_exact`, and
+The computational experiments apply an adaptive continuation method to symmetry-reduced weighted Max-Cut instances. The method estimates local spectral gaps with sparse eigensolvers and propagates those estimates over intervals of the interpolation parameter using a shift-invariant Weyl bound.
+
+The archived study contains 60 instances at effective problem sizes `N=10`, `N=12`, and `N=14`, with 20 seeded graphs at each size. This README explains how to verify the archived artifacts, reproduce the numerical experiment, regenerate every computational table and figure in `main.tex`, and compile the manuscript.
+
+## Archived cohort
+
+The primary Level 2 archive contains exactly **60 instances**:
+
+- effective qubit sizes `N=10`, `N=12`, and `N=14`, corresponding to `n_v=11`, `n_v=13`, and `n_v=15` physical vertices;
+- seeds `0` through `19` once at each size;
+- connected weighted Erdős--Rényi graphs with `p=0.5` and a pinned endpoint optimum that `verify_artifacts.py` checks exactly for nondegeneracy.
+
+## Scope of the numerical results
+
+The aggregate CSV and sparse-eigensolver records are conditional numerical results. Ritz residuals are recorded, but the calculations do not independently verify eigenvalue indexing or use enclosure arithmetic. The selected `N=10`, seed-0 dense-grid comparison is likewise a diagnostic consistency check rather than a continuous-path certificate.
+
+The experiments evaluate the finite-size behavior, coverage, and sparse-eigensolve workload of the continuation method. They do not establish asymptotic gap scaling, adiabatic runtime bounds, or computational speedup.
+
+## Numerical and artifact conventions
+
+Archived binary64 edge weights are interpreted as exact dyadic rationals. If `W_exact` is their exact rational sum, then `W_upper` is the least binary64 value satisfying `W_upper >= W_exact`, and
 
 \[
 K_{\mathrm{gap,cert}}
@@ -10,38 +30,22 @@ K_{\mathrm{gap,cert}}
 \operatorname{exact}_{64}(W_{\mathrm{upper}})+\Lambda_I
 \right),
 \qquad
-\Lambda_I=2\left\lfloor\frac{n_v}{2}\right\rfloor,
+\Lambda_I=2\left\lfloor\frac{n_v}{2}\right\rfloor.
 \]
 
-where `up_64` denotes least upward binary64 rounding. The compatibility column `W` aliases `W_upper`; `W_model` remains the ordinary rounded Python sum used for model diagnostics.
-
-## Archived cohort and artifact levels
-
-The primary archive contains exactly **40 instances**:
-
-- effective qubit sizes `N=10` and `N=12`, corresponding to `n_v=11` and `n_v=13` physical vertices;
-- seeds `0` through `19` once at each size;
-- connected weighted Erdős--Rényi graphs with `p=0.5` and a pinned endpoint optimum that `verify_artifacts.py` checks exactly for nondegeneracy.
-
-The aggregate CSV and ordinary sparse-eigensolver records are **Level 2 conditional numerical artifacts**. Ritz residuals are recorded, but eigenvalue indexing and outward rounding are not independently verified. The selected `N=10`, seed-0 dense-grid comparison is also a Level 2 consistency check; dense floating-point sampling does not make it Level 3.
-
-The optional `results/level3/manifest.json` bundle covers exactly four representative exact-dyadic anchors: two for `N=10`, seed 0, and two for `N=12`, seed 0. A passing anchor is **Level 3 only for the exact-dyadic Hamiltonian and parameter recorded in its specification**. Combining those point bounds with the archived exact-rational spectral-width certificates rigorously covers the four subintervals reported in the manuscript, but it does not upgrade either full continuous sweep or the other aggregate rows. When the manifest is present, `verify_artifacts.py` checks every exact hash and invokes `verify_level3_anchors.py` in read-only mode for the exact rational certificate obligations.
-
-The separate `results/level3_continuations/manifest.json` contains complete exact-dyadic Level 3 continuations for `N=10` seeds 18, 4, and 10. Each starts from the exact reduced-driver gap, uses independently checked comparison-matrix anchors with strictly overlapping Weyl intervals, and covers `[0,1]`; seed 10 uses an exact enumerated problem-endpoint anchor for its final overlap. These three records are distinct from the 40 aggregate Level 2 sweeps.
+Here `up_64` denotes least upward binary64 rounding. The compatibility column `W` aliases `W_upper`; `W_model` remains the ordinary rounded Python sum used for model diagnostics. These conventions make the archived weight sums, propagation constants, and cross-file checks reproducible without changing the conditional status of the sparse-eigensolver bounds.
 
 ## Repository structure
 
-- `main.py`: generates the 40 result-schema-4 rows, graph-schema-2 records, `results/graph_instances.jsonl`, `results/section7_run_manifest.json`, and the selected Level 2 conditional log.
-- `section7_results.csv`: result-schema-4 aggregate metrics for the 40 retained instances, including exact rational and upward-rounding metadata.
+- `main.py`: contains the shared Level 2 experiment implementation and regenerates the original 40-row `N=10,12` base cohort.
+- `extend_level2_n14.py`: retains the archived base rows, evaluates seeds 0--19 at `N=14` through the same implementation, and atomically writes the 60-row aggregate CSV, graph archive, and run manifest.
+- `section7_results.csv`: result-schema-4 aggregate metrics for the 60 retained instances, including exact rational and upward-rounding metadata.
 - `summarize_section7_results.py`: strictly validates the cohort and exact rounding chain, then writes deterministic JSON and TeX summaries with weight, spectral-diameter, solve-count, and global conditional-bound statistics.
 - `plot_new_results.py`: generates the aggregate solve-count and endpoint-coverage figures. It does not generate a complexity-scaling plot.
 - `generate_updated_comparison.py`: generates the two `N=10`, seed-0 Weyl-envelope figures from the archived graph record.
-- `scratch/plot_grid_vs_gap.py`: generates the `N=10` and `N=12` seed-0 solve-density figures from archived graph records.
+- `scratch/plot_grid_vs_gap.py`: generates the `N=10`, `N=12`, and `N=14` seed-0 solve-density figures from archived graph records.
 - `test_main.py`: exercises the analytic gap-width bound and continuation edge cases, including upward rounding, floor probes, invalid parameters, and zero-diameter paths.
-- `verify_artifacts.py`: cross-checks the CSV, run manifest, graph metadata and hashes, summaries, selected Level 2 interval algebra, required figures, and any optional Level 3 manifest; it also exactly enumerates every pinned endpoint configuration to prove nondegeneracy for all 40 graph-schema-2 records.
-- `generate_level3_anchors.py` and `verify_level3_anchors.py`: generate untrusted witnesses and independently verify the four selected exact-dyadic Level 3 anchor certificates.
-- `verify_level3_intervals.py`: combines the passing exact anchor bounds with the archived exact-rational spectral-width certificates and replays the four rigorous continuous-subinterval claims reported in the manuscript; these intervals do not cover a full sweep.
-- `generate_level3_continuations.py` and `verify_level3_continuations.py`: generate and independently replay complete Level 3 continuations for selected `N=10` paths. The verifier reruns every exact anchor calculation and checks strict interval coverage of `[0,1]`.
+- `verify_artifacts.py`: cross-checks the CSV, run manifest, graph metadata and hashes, summaries, selected Level 2 interval algebra, and required figures; it also exactly enumerates every pinned endpoint configuration to prove nondegeneracy for all 60 graph-schema-2 records.
 - `maxcut_gap_benchmark.py`: a separate exploratory benchmark and shared Hamiltonian library; it does not generate the Section 7 archive.
 
 ## Reference environment
@@ -61,86 +65,88 @@ Sparse ARPACK solves can differ slightly across SciPy, BLAS, CPU, and thread con
 
 Copyright (c) 2026 Tiago Verissimo. This repository is distributed under the [MIT License](LICENSE). The license permits reuse subject to its notice and disclaimer; users remain responsible for checking compatibility with any third-party dependency or venue policy.
 
-For a citable public release, create a Git tag and GitHub Release for the exact reviewed commit, then archive that release with a DOI service such as Zenodo. Record the release tag, commit SHA-256, and DOI in the manuscript's code-and-data availability statement. The current artifact records already contain SHA-256 links for the graph, run, and Level 3 payloads.
+For a citable public release, create a Git tag and GitHub Release for the exact reviewed commit, then archive that release with a DOI service such as Zenodo. Record the release tag, commit SHA-256, and DOI in the manuscript's code-and-data availability statement. The current artifact records already contain SHA-256 links for the graph and run payloads.
 
-## Verify the archived artifacts
+## Reproducing the results in `main.tex`
 
-Run the focused unit suite first:
+The mathematical propositions and proofs in `main.tex` are analytic. The reproducibility pipeline below covers every computational table, figure, and quantitative observation in the manuscript's Computational Results section. Run all commands from the repository root.
+
+### Route A: replay the archived results
+
+Use this route to verify the evidence shipped with the repository without repeating the expensive sparse-eigensolver experiment:
 
 ```bash
 python -m unittest -v test_main.py
-```
-
-The artifact checker is read-only:
-
-```bash
-python verify_artifacts.py
-```
-
-It fails on an incomplete cohort, a result schema other than version 4, a graph schema other than version 2, invalid exact rational/upward-rounding metadata, stale summaries, graph/hash mismatches, inconsistent selected-log algebra, or missing manuscript figures. For every graph-schema-2 record, it interprets `edge_weight_hex` as exact dyadic fractions, enumerates all `2^N` pinned representatives, and requires a unique minimum with a strictly positive exact gap to the second ordered uncut cost. No floating tolerance is used for this endpoint-nondegeneracy check. If no Level 3 manifest is present, it reports that the archive remains Level 2. The selected exact verifier can also be run directly without rewriting its result JSON:
-
-```bash
-python verify_level3_anchors.py --no-write-results
-python verify_level3_intervals.py
-python verify_level3_continuations.py --no-write-results
-```
-
-To check only that the deterministic summaries match the CSV without rewriting them:
-
-```bash
 python summarize_section7_results.py --check
-```
-
-## Regenerate summaries and figures from the archived CSV
-
-These commands do not rerun the 40-instance ensemble:
-
-```bash
-python summarize_section7_results.py
-python plot_new_results.py
-python generate_updated_comparison.py
-python scratch/plot_grid_vs_gap.py
 python verify_artifacts.py
-```
-
-They write:
-
-- `results/section7_summary.json`;
-- `results/section7_summary.tex`;
-- `results/efficiency_comparison.png` and `results/certificate_coverage.png`;
-- `results/comparison_updated_N10_no_anchors.png` and `results/comparison_updated_N10_anchors.png`;
-- `results/grid_density_vs_gap.png` and `results/grid_density_vs_gap_N12.png`.
-
-The plotting scripts resolve paths relative to the project root and use a headless Matplotlib backend. Instance-specific figures load and hash-check archived graph records rather than resampling graphs.
-
-## Full numerical reproduction
-
-From the repository root, run the commands in this order:
-
-```bash
-python main.py
-python summarize_section7_results.py
-python plot_new_results.py
-python generate_updated_comparison.py
-python scratch/plot_grid_vs_gap.py
-python generate_level3_anchors.py
-python verify_level3_intervals.py
-python generate_level3_continuations.py
-python verify_level3_continuations.py
-python verify_artifacts.py
-```
-
-`main.py` executes 20 seeds for each of `N=10` and `N=12`. The full run performs many sparse eigensolves and can take several hours. It atomically rewrites `section7_results.csv`, the graph archive, and the run manifest only after all 40 rows are available.
-
-## Build the manuscript
-
-After summary and figure generation, build the manuscript from the repository root:
-
-```bash
 latexmk -pdf main.tex
 ```
 
-To remove LaTeX auxiliary files without touching numerical artifacts:
+The unit suite exercises the propagation constant, directed upward rounding, continuation edge cases, floor probing, and the zero-diameter branch. `summarize_section7_results.py --check` reconstructs the deterministic JSON and TeX summaries in memory and requires byte-for-byte agreement with the archived files. `verify_artifacts.py` then checks the complete 60-row chain:
+
+- result-schema-4 rows for `N=10,12,14` and seeds 0--19;
+- the run manifest, individual graph records, canonical graph archive, source hashes, and cross-file SHA-256 links;
+- exact interpretation of every binary64 edge weight, directed rounding of the propagation bound, and exact endpoint nondegeneracy by enumeration of all pinned configurations;
+- the selected `N=10`, seed-0 continuation log and its interval algebra;
+- deterministic summary files and provenance metadata embedded in all required figures.
+
+The checker is read-only and returns a nonzero status for an incomplete cohort, stale derived artifact, inconsistent hash, invalid rounding record, endpoint degeneracy, or missing figure. `latexmk` imports `results/section7_summary.tex` into `main.tex` and produces `main.pdf`.
+
+### Route B: recompute the complete 60-instance experiment
+
+This route replaces the archived numerical outputs. It performs many sparse ARPACK solves and can take several hours:
+
+```bash
+python main.py
+python extend_level2_n14.py --processes 5
+python summarize_section7_results.py
+python plot_new_results.py
+python generate_updated_comparison.py
+python scratch/plot_grid_vs_gap.py
+python verify_artifacts.py
+latexmk -pdf main.tex
+```
+
+The order matters:
+
+1. `main.py` regenerates the fixed 40-instance base cohort for `N=10,12`, seeds 0--19. It initially replaces `section7_results.csv`, `results/graph_instances.jsonl`, and `results/section7_run_manifest.json` with the 40-row base cohort. The driver uses five worker processes.
+2. `extend_level2_n14.py` retains those 40 rows, computes the 20 `N=14` instances, and atomically replaces the aggregate CSV, graph archive, and manifest with the final 60-row cohort. Set `--processes` to a smaller positive number if memory is limited; this changes concurrency, not the requested instances.
+3. `summarize_section7_results.py` validates the final cohort and generates `results/section7_summary.json` and `results/section7_summary.tex`.
+4. The three plotting commands regenerate every manuscript figure from the validated CSV and archived graph records.
+5. `verify_artifacts.py` checks the complete regenerated dependency chain before `latexmk` builds the paper.
+
+Do not run the summary, plotting, or verification steps between steps 1 and 2: the intermediate archive intentionally contains only 40 rows, while the manuscript and validators require all 60.
+
+### Manuscript artifact map
+
+The generated table rows all come from `results/section7_summary.tex`, which is created solely from `section7_results.csv`:
+
+| Manuscript result | Generated macro | Source fields |
+| --- | --- | --- |
+| Table `tab:gap_diameter` | `\SectionSevenGapDiameterRows` | estimated spectral diameter and `K_gap_cert` |
+| Table `tab:bound_comparison` | `\SectionSevenBoundComparisonRows` | previous, uncentered, and shift-invariant propagation constants |
+| Table `tab:endpoint_coverage` | `\SectionSevenCoverageRows` | 201-point endpoint-bound coverage fractions |
+| Table `tab:anchor_stats` | `\SectionSevenSolveCountRows` | uniform-grid and adaptive sparse-eigensolve counts |
+| Table `tab:global-conditional` | `\SectionSevenGlobalConditionalRows` | per-run global conditional lower bounds |
+| Table `tab:unresolved_stats` | `\SectionSevenUnresolvedRows` | merged unresolved-window counts and widths |
+
+The scripts and output files for the manuscript figures are:
+
+| Command | Manuscript outputs |
+| --- | --- |
+| `python generate_updated_comparison.py` | `results/comparison_updated_N10_no_anchors.png`, `results/comparison_updated_N10_anchors.png` |
+| `python plot_new_results.py` | `results/efficiency_comparison.png` |
+| `python scratch/plot_grid_vs_gap.py` | `results/grid_density_vs_gap.png`, `results/grid_density_vs_gap_N12.png`, `results/grid_density_vs_gap_N14.png` |
+
+`plot_new_results.py` also writes `results/certificate_coverage.png`. This is a checked archive diagnostic, although it is not currently included as a figure in `main.tex`. All plotting scripts use a headless Matplotlib backend, resolve paths relative to the repository root, and embed the source CSV hash in the PNG metadata. Instance-specific plots also embed the corresponding graph-record hash.
+
+The explicit workload observations in the manuscript—including the `N=12` seed-9 and seed-13 call counts, the single width-`0.001` unresolved window, the `N=14` seed-7 maximum, ensemble means and medians, and the resolved-run counts—are computed from the same 60 CSV rows by `summarize_section7_results.py`. The integral-cost illustration (`56.52` estimated calls versus 57 observed calls) comes from the selected `N=10`, seed-0 row and its `results/conditional_log_N10_seed0.json` record. `verify_artifacts.py` cross-checks that selected record against the CSV and graph data.
+
+### Numerical reproducibility expectations
+
+Graph generation is fixed by the archived seeds and graph schema, but sparse eigensolver results and wall-clock measurements can vary slightly with SciPy, BLAS, CPU, process scheduling, and warm-start behavior. Use the pinned Python versions above for the closest reproduction. The manuscript treats these outputs as conditional floating-point results; wall times are recorded diagnostics and are not expected to match exactly. The artifact checker uses exact comparisons for identities, rational metadata, and endpoint enumeration, and explicit tolerances for the documented floating-point algebra.
+
+To remove LaTeX auxiliary files without touching numerical artifacts, run:
 
 ```bash
 latexmk -c main.tex

@@ -65,7 +65,7 @@
 
 \usepackage[colorlinks=true, linkcolor=blue, citecolor=magenta, urlcolor=teal]{hyperref}
 
-\title{\textbf{Shift-Invariant Spectral-Gap Continuation with Replayable Exact-Dyadic Certificates}}
+\title{\textbf{Shift-Invariant Spectral-Gap Continuation from Local Bounds}}
 
 \author{
   \textbf{Tiago Verissimo}\\
@@ -80,10 +80,12 @@
 \maketitle
 
 \begin{abstract}
-We develop a method for obtaining lower bounds on the spectral gap of affine adiabatic quantum-computing Hamiltonians. For $H(s)=H_I+s(H_P-H_I)$, we show that Weyl's inequalities propagate a gap bound with a shift-invariant Lipschitz constant given by the spectral width of $H_P-H_I$. This improves on the usual uncentered operator-norm estimate by removing scalar energy shifts, which do not affect the gap. We then use this result in an adaptive continuation scheme that records the interval actually traversed at every step. When a proposed step becomes too small, a mark-and-probe rule tests a larger interval and records it as unresolved whenever the propagated bound is nonpositive.
+We develop a framework for propagating lower bounds on the spectral gap of affine adiabatic quantum-computing Hamiltonians over neighborhoods of the interpolation parameter. For $H(s)=H_I+s(H_P-H_I)$, suppose that $\delta_0>0$ is a valid lower bound on the gap at an anchor $s_0$. Weyl's inequalities give $\Delta(s)\ge \delta_0-K_{\mathrm{gap}}|s-s_0|$, where $K_{\mathrm{gap}}$ is the spectral width of $H_P-H_I$. Each anchor therefore provides an explicit neighborhood on which the propagated lower bound remains positive. We compose these neighborhoods in an adaptive continuation scheme that records every interval actually traversed and marks an interval as unresolved whenever its propagated lower bound is nonpositive.
 
-We apply the method to 40 symmetry-reduced weighted Max-Cut instances. The floating-point continuation runs resolve all 20 $N=10$ paths and 19 of 20 $N=12$ paths, subject to the assumption that the computed Ritz values have the required eigenvalue indices; the remaining $N=12$ run leaves a single interval of width $0.001$ unresolved. To obtain unconditional results, we also give exact-dyadic comparison-matrix certificates for four individual anchors and their associated subintervals. Repeating this exact procedure produces complete certified continuations for three $N=10$ instances (seeds 18, 4, and 10), with overlapping intervals covering the full path $[0,1]$. These benchmarks provide a finite-size test of quantitative gap certification, not evidence for asymptotic gap scaling, adiabatic runtime bounds, or computational speedup.
+We evaluate the framework on 60 symmetry-reduced weighted Max-Cut instances. Conditional on the floating-point Ritz values having the required eigenvalue indices and on the numerical lower-bound calculations, the continuation resolves all 20 paths at $N=10$ and $N=14$, and 19 of 20 paths at $N=12$; the remaining $N=12$ run leaves one unresolved interval of width $0.001$. These experiments test the practical ability of the method to produce quantitative gap lower bounds at finite size; they do not establish asymptotic gap scaling, adiabatic runtime bounds, or computational speedup.
 \end{abstract}
+
+\tableofcontents
 
 \section{Introduction and Motivation}
 Adiabatic quantum computing (AQC) evolves from a driver Hamiltonian $H_I$ toward a problem Hamiltonian $H_P$, commonly through the affine path introduced in \cite{farhi2000quantumcomputationadiabaticevolution},
@@ -102,25 +104,25 @@ T \gg \frac{\max_s \left| \opvalue{\psi_1(s)}{\frac{\dd H(s)}{\dd s}}{\psi_0(s)}
 \end{equation}
 is a useful heuristic scaling relation, not a general adiabatic theorem. Rigorous formulations impose additional smoothness and derivative conditions. Small gaps, including those associated with first-order quantum phase transitions, can make adiabatic evolution costly \cite{smelyanskiy2002dynamicsquantumadiabaticevolution,PhysRevResearch.5.043236}; alternative paths and catalysts are therefore widely studied \cite{PhysRevResearch.5.043236,hnzj-j7kt,farhi2000quantumcomputationadiabaticevolution}.
 
-This paper asks a narrower verification question: how can a lower bound known at finitely many parameter values be propagated between them? For $D=H_P-H_I$, the scalar part of $D$ shifts all energies equally and cannot change a gap. We therefore use
+This paper asks a narrower propagation question: given a lower bound at an anchor $s_0$, on which neighborhood of $s_0$ does the resulting lower bound remain positive? Let $D=H_P-H_I$. Because the scalar part of $D$ shifts all energies equally and cannot change a gap, the relevant propagation constant is its spectral width,
 \begin{equation}
-K_{\mathrm{gap}}=\lambda_{\max}(D)-\lambda_{\min}(D)
+K_{\mathrm{gap}}=\lambda_{\max}(D)-\lambda_{\min}(D),
 \end{equation}
-rather than taking $2\norm{D}_2$ as the primary bound. In the archived benchmark, binary64 weights are exact dyadic inputs, $W_{\mathrm{exact}}$ is their exact rational sum, and $K_{\mathrm{gap,cert}}$ is rounded upward so that
+rather than the conventional uncentered bound $2\norm{D}_2$. If $\delta_0$ is a valid lower bound on $\Delta(s_0)$, Weyl's inequalities give
 \begin{equation}
-K_{\mathrm{gap,cert}}\ge W_{\mathrm{exact}}+\Lambda_I\ge K_{\mathrm{gap}}.
+\Delta(s)\ge\delta_0-K_{\mathrm{gap}}|s-s_0|.
 \end{equation}
-Ordinary adaptive steps use $\eta\Delta_{+,\mathrm{lo}}/K_{\mathrm{gap,cert}}$. A floor trigger instead marks the interval, advances by an exponentially growing capped probe, and resolves it only when the bound computed from the actual clipped length is positive.
+Thus an anchor produces an explicit lower-bound neighborhood. The shift-invariant constant removes gap-irrelevant energy offsets and can enlarge this neighborhood.
 
-All matrix inequalities used here are classical. What is new is the verification contract joining them: a scalar-shift-invariant propagation constant, actual-length mark-and-probe records that never silently claim a skipped interval, and independently replayable exact-dyadic anchor payloads with an explicit separation between conditional and exact claims. A conventional floating-point sweep can report small residuals without proving which eigenvalues were found, while an ordinary adaptive log may not contain enough information to reconstruct what was traversed or left unresolved. The present workflow makes those two failure modes auditable and, for the four exact anchors, converts pointwise indexed bounds into rigorously verified continuous subintervals. This is useful to AQC path designers and verification researchers deciding whether numerical evidence supports a quantitative interval bound, where verified eigensolver effort should be spent next, and which portions of a path may safely enter a subsequent schedule or adiabatic-runtime analysis.
+We turn this local statement into a continuation procedure that chains such neighborhoods along the path. The procedure records the intervals it covers and identifies intervals that its available bounds do not resolve. In the numerical study, pointwise bounds are estimated with a floating-point sparse eigensolver, so the resulting interval bounds remain conditional on the eigenvalue-indexing and numerical assumptions.
 
-The aggregate sweeps use conditionally indexed floating-point anchors and remain Level~2. In contrast, three separately archived $N=10$ continuations use an exact driver anchor, independently checked comparison-matrix anchors, and, where needed, an exact enumerated problem-endpoint anchor; their strictly overlapping Weyl intervals cover the complete path. The retained Max-Cut paths also have Perron--Frobenius ground-state uniqueness in the interior and are filtered for endpoint nondegeneracy. We therefore use them as a controlled validation set: structural arguments supply the qualitative ground truth that the exact-dyadic paths do not close, while continuation tests whether a quantitative and independently auditable lower-bound mechanism recovers positive intervals and at what computational cost. The PSD results are supplementary and do not drive the algorithm. The empirical scope is intentionally limited to 20 connected instances at each retained size, so it does not support asymptotic scaling or uniform runtime claims.
+Our Max-Cut examples provide a controlled finite-size evaluation of whether adaptive continuation can construct useful quantitative lower-bound intervals in practice and what computational workload it requires. The experiments do not establish asymptotic gap scaling, adiabatic runtime bounds, or computational speedup.
 
 \section{Related Work and Scope}
 This paper positions itself at the intersection of classical matrix analysis and the physical engineering of adiabatic pathways. The literature driving this study can be categorized into three major streams:
 
 \subsection{Classical Spectral Stability and Subspace Rotations}
-The static behavior of eigenvalues under additive perturbations is governed by the regular perturbation theory of Kato \cite{Kato1966} and the spectral variation metrics surveyed by Bhatia \cite{Bhatia2007}. While Weyl's inequalities provide worst-case estimates on individual eigenvalues, they ignore eigenvector geometry. To address how state vectors track these moving energy levels, the numerical linear algebra community developed eigenspace stability bounds, most notably the Davis-Kahan $\sin\theta$ theorem \cite{DavisKahan1970} and its modern $\ell_\infty$ and small-gap refinements \cite{Fan2018, TranVu2022}. These eigenspace stability bounds are complementary to our eigenvalue-only certificates and could support future extensions to state-tracking certification.
+The static behavior of eigenvalues under additive perturbations is governed by the regular perturbation theory of Kato \cite{Kato1966} and the spectral variation metrics surveyed by Bhatia \cite{Bhatia2007}. While Weyl's inequalities provide worst-case estimates on individual eigenvalues, they ignore eigenvector geometry. To address how state vectors track these moving energy levels, the numerical linear algebra community developed eigenspace stability bounds, most notably the Davis-Kahan $\sin\theta$ theorem \cite{DavisKahan1970} and its modern $\ell_\infty$ and small-gap refinements \cite{Fan2018, TranVu2022}. These eigenspace stability bounds are complementary to our eigenvalue-only estimates and could support future extensions to state-tracking analysis.
 
 \subsection{Rigorous Adiabatic Theorems and Local Scheduling}
 The ``folk'' condition $T\propto\Delta^{-2}$ is generally insufficient by itself to guarantee high-fidelity state tracking. Rigorous adiabatic theorems, including those of Jansen, Ruskai, and Seiler \cite{JRS2007}, give bounds involving path derivatives and the gap. Local schedules such as the Roland--Cerf rule $\dd s/\dd t\propto\Delta^2(s)$ \cite{RolandCerf2002} slow the evolution near small gaps. Valid interval gap lower bounds could be used as inputs to such analyses, but this paper does not derive a runtime guarantee.
@@ -130,10 +132,7 @@ Werner et al.\ \cite{PhysRevResearch.5.043236} estimate the location $s^*$ of a 
 \subsection{Constraints, Catalysts, and the Scope of PSD Comparisons}
 QUBO penalty constructions are surveyed by Lucas \cite{Lucas2014}, while stoquastic and non-stoquastic catalysts have been studied as path modifications near difficult transitions \cite{SekiNishimori2012, Albash2019, Crosson2020designing}. Spectral gap amplification in the sense of Somma and Boixo \cite{SommaBoixo2013} is a separate construction with additional structure. The supplementary PSD monotonicity statements in Appendix~\ref{app:psd-comparisons} say only that adding a PSD term cannot lower an ordered eigenvalue. Because the ground and excited energies may rise by different amounts---or by the same scalar shift---this observation neither predicts catalyst performance nor constitutes a catalyst-design principle.
 
-\subsection{Verified Eigensolvers and Eigenvalue Enclosures}
-Verified numerical linear algebra can provide rigorous indexed eigenvalue enclosures using interval arithmetic, variational bounds, or verified inertia calculations \cite{Rump2010Acta,Temple1928,Kato1949,Lehmann1950}. Residual norms from an ordinary floating-point sparse solve provide only spectral-existence information near Ritz values and do not identify eigenvalue indices. The selected replayable exact anchors below instead combine an exact Rayleigh upper bound with a comparison-matrix lower bound for a principal submatrix and Cauchy interlacing. Their exact-dyadic specifications and no-tolerance checker make the pointwise results independently reproducible; this is a classical finite-dimensional route to indexed verification, not a claim that the floating-point continuation has become fully verified.
-
-The individual matrix inequalities used here are classical. The paper's scope is to specialize the shift-invariant Weyl bound to affine AQC gaps, make the continuation and mark-and-probe bookkeeping explicit, and demonstrate both a conditional Level-2 sweep and exact-dyadic anchors whose bounds rigorously propagate over nonzero continuous subintervals.
+The individual matrix inequalities used here are classical. The paper's scope is to specialize the shift-invariant Weyl bound to affine AQC gaps, make the continuation and mark-and-probe bookkeeping explicit, and evaluate the resulting conditional lower-bound intervals in floating-point experiments.
 
 \section{Contributions}
 
@@ -148,13 +147,13 @@ For the affine path $H(s)=H_I+sD$, $D=H_P-H_I$, the paper makes the following li
     \end{equation}
     The conventional $2\norm{D}_2$ estimate is retained only for comparison.
 
-    \item \textbf{Continuation and mark-and-probe bookkeeping.} The schema-4 sweep uses the direct $K_{\mathrm{gap,cert}}$, records proposed, floor-overridden, probe-planned, and actual clipped lengths, and classifies every interval by $B_k>0$. Exponential probing avoids repeated microscopic floor steps without silently claiming the skipped region. A positive floor still gives unconditional and refined termination bounds, including the case $K_{\mathrm{gap,cert}}=0$.
+    \item \textbf{Continuation and mark-and-probe bookkeeping.} The adaptive sweep records proposed, floor-overridden, probe-planned, and actual clipped lengths, and classifies every interval by $B_k>0$. Exponential probing avoids repeated microscopic floor steps without silently claiming the skipped region. A positive floor gives unconditional and refined termination bounds, including the case in which the supplied propagation bound vanishes.
 
-    \item \textbf{Exact indexed anchors and complete continuations.} A comparison-matrix theorem combines scaled diagonal dominance, a quadratic-form comparison, Cauchy interlacing, and an exact Rayleigh quotient. Replayable exact rational records and an independent checker apply this result to selected anchors and to three complete $N=10$ paths. Exact driver and, where needed, problem-endpoint anchors together with strictly overlapping propagated intervals verify gap positivity on all of $[0,1]$ for seeds 18, 4, and 10. The aggregate sweeps remain Level~2.
+    \item \textbf{Finite-size numerical evaluation.} Floating-point experiments on symmetry-reduced weighted Max-Cut instances measure the coverage and sparse-eigensolve workload of the continuation procedure while keeping its numerical assumptions explicit.
 
 \end{enumerate}
 
-The aggregate tables are imported from the generated schema-\SectionSevenResultSchema{} summary rather than transcribed by hand. Their continuous-path lower bounds remain conditional on floating-point eigenvalue indexing.
+The aggregate tables are imported from a generated summary rather than transcribed by hand. Their continuous-path lower bounds remain conditional on floating-point eigenvalue indexing and numerical arithmetic.
 
 \section{Mathematical Preliminaries}
 
@@ -186,7 +185,7 @@ For Hermitian $A$, the spectral theorem immediately gives
 \end{equation}
 \end{remark}
 
-The underlying mathematical machinery driving both variational ceilings and Weyl-type stability bounds is the Courant--Fischer minimax theorem \cite{Bhatia2007}. For any self-adjoint operator $H \in \Herm(d)$ with ordered eigenvalues $\lambda_1 \le \lambda_2 \le \dots \le \lambda_d$, the theorem provides a variational characterization of the entire spectrum:
+The variational foundation of Weyl-type stability bounds is the Courant--Fischer minimax theorem \cite{Bhatia2007}. For any self-adjoint operator $H \in \Herm(d)$ with ordered eigenvalues $\lambda_1 \le \lambda_2 \le \dots \le \lambda_d$, the theorem provides a variational characterization of the entire spectrum:
 
 \begin{equation}
 \label{eq:courant-fischer}
@@ -203,7 +202,7 @@ E_0(s)\le E_1(s)\le \cdots \le E_{d-1}(s).
 \end{equation}
 The gap function is $\Delta(s)=E_1(s)-E_0(s)$. Thus $E_k(s)$ corresponds to $\lambda_{k+1}(H(s))$ under the generic matrix-indexing convention.
 
-\section{Shift-Invariant Gap Propagation and Exact Anchor Certificates}
+\section{Shift-Invariant Gap Propagation}
 
 Weyl's inequalities control ordered eigenvalues under Hermitian perturbations. Applied directly to the difference of two energy levels, they retain only the spectral width of the perturbation and discard its gap-irrelevant scalar part.
 
@@ -322,82 +321,16 @@ Choose $c=0$ in Eq.~\eqref{eq:shift-invariant-norm}.
 \end{proof}
 
 \begin{remark}[Propagation from one anchor]
-Let $\delta_0>0$ be a valid lower bound on $\Delta(s_0)$ and let $K_{\mathrm{gap,cert}}\ge K_{\mathrm{gap}}$. Then
+Let $\delta_0>0$ be a valid lower bound on $\Delta(s_0)$ and let $K_{\mathrm{gap}}^{\mathrm{ub}}\ge K_{\mathrm{gap}}$. Then
 \begin{equation}
-\Delta(s)\ge\delta_0-K_{\mathrm{gap,cert}}|s-s_0|.
+\Delta(s)\ge\delta_0-K_{\mathrm{gap}}^{\mathrm{ub}}|s-s_0|.
 \end{equation}
-If $K_{\mathrm{gap,cert}}>0$, the right-hand side is positive for $|s-s_0|<\delta_0/K_{\mathrm{gap,cert}}$. If $K_{\mathrm{gap,cert}}=0$, the gap is constant and the positive anchor bound propagates across the entire path.
-\end{remark}
-
-\subsection{Exact Indexed Anchor Verification by a Comparison Matrix}
-
-\begin{theorem}[Exact Indexed Anchor Bound from a Positive Witness]
-\label{thm:exact-indexed-anchor}
-Let $H\in\mathbb R^{d\times d}$ be real symmetric with ordered eigenvalues
-\begin{equation}
-E_0(H)\le E_1(H)\le\cdots\le E_{d-1}(H).
-\end{equation}
-Delete coordinate $p$ to form the principal submatrix $A=H^{(p)}\in\mathbb R^{(d-1)\times(d-1)}$, and define its comparison matrix $M$ by
-\begin{equation}
-M_{ii}=A_{ii},
-\qquad
-M_{ij}=-|A_{ij}|\quad(i\ne j).
-\end{equation}
-For any vector $x\in\mathbb R^{d-1}$ with $x_i>0$ for every $i$, set
-\begin{equation}
-\ell:=\min_i\frac{(Mx)_i}{x_i}.
-\end{equation}
-Then
-\begin{equation}
-E_1(H)\ge\lambda_{\min}(A)\ge\ell.
-\end{equation}
-Moreover, for any nonzero $q\in\mathbb R^d$, the exact Rayleigh quotient
-\begin{equation}
-U_0:=\frac{q^{\mathsf T}Hq}{q^{\mathsf T}q}
-\end{equation}
-satisfies $E_0(H)\le U_0$, and hence
-\begin{equation}
-\label{eq:exact-anchor-gap}
-\Delta(H)=E_1(H)-E_0(H)\ge\ell-U_0.
-\end{equation}
-In particular, $\ell-U_0>0$ is an exact indexed gap certificate at that anchor.
-\end{theorem}
-
-\begin{proof}
-By definition of $\ell$, $(M-\ell I)x\ge0$ componentwise. Let $R=\operatorname{diag}(x_1,\ldots,x_{d-1})$. The symmetric matrix
-\begin{equation}
-S:=R(M-\ell I)R
-\end{equation}
-has nonpositive off-diagonal entries. For every row $i$, the inequality $((M-\ell I)x)_i\ge0$ gives
-\begin{equation}
-S_{ii}=x_i^2(M_{ii}-\ell)
-\ge x_i\sum_{j\ne i}|M_{ij}|x_j
-=\sum_{j\ne i}|S_{ij}|.
-\end{equation}
-Thus $S$ is symmetric diagonally dominant with nonnegative diagonal and is positive-semidefinite. Since $R$ is invertible, congruence implies $M-\ell I\ge0$.
-
-For arbitrary $y\in\mathbb R^{d-1}$, put $z_i=|y_i|$. The definition of $M$ and the preceding bound give
-\begin{align}
-y^{\mathsf T}Ay
-&\ge \sum_i A_{ii}y_i^2-2\sum_{i<j}|A_{ij}|\,|y_i|\,|y_j|\\
-&=z^{\mathsf T}Mz
-\ge\ell\norm{z}_2^2
-=\ell\norm{y}_2^2.
-\end{align}
-Therefore $\lambda_{\min}(A)\ge\ell$. Cauchy interlacing for a principal submatrix gives
-\begin{equation}
-E_0(H)\le\lambda_{\min}(A)\le E_1(H),
-\end{equation}
-so $E_1(H)\ge\ell$. Finally, Rayleigh--Ritz gives $E_0(H)\le U_0$ for every nonzero $q$, and subtraction proves Eq.~\eqref{eq:exact-anchor-gap}.
-\end{proof}
-
-\begin{remark}
-The theorem is a classical comparison-and-interlacing certificate. Its force in an implementation comes from checking the input matrix, positive witness, componentwise inequalities, and Rayleigh quotient in exact arithmetic rather than from a floating-point tolerance.
+If $K_{\mathrm{gap}}^{\mathrm{ub}}>0$, the right-hand side is positive for $|s-s_0|<\delta_0/K_{\mathrm{gap}}^{\mathrm{ub}}$. If $K_{\mathrm{gap}}^{\mathrm{ub}}=0$, the gap is constant and the positive anchor bound propagates across the entire path.
 \end{remark}
 
 \section{Computational Results}
 
-We report ordinary floating-point experiments with the continuation rule on finite weighted Erd\H{o}s--R\'{e}nyi Max-Cut instances with $p=0.5$. Sampled graphs are required to be connected, and the generator initially retains instances whose reduced problem Hamiltonian is numerically found to have a nondegenerate ground state. The artifact verifier subsequently enumerates every pinned configuration using exact dyadic arithmetic and confirms endpoint nondegeneracy for all 40 archived instances. The cohort is a controlled validation set rather than a discovery set: structural positivity supplies the qualitative answer, while the experiment asks whether the quantitative continuation records recover positive lower-bound intervals and what workload they require. The aggregate sweeps assess conditional lower-bound envelopes and are not verified numerical certificates. Alongside them, Tables~\ref{tab:level3-anchors} and \ref{tab:level3-continuations} provide replayable Level-3 point and complete-path certificates. The evaluation asks four questions: how much the shift-invariant constant improves the earlier analytic estimates; how many paths the conditional continuation resolves; what sparse-eigensolve workload is observed; and which selected claims can be checked exactly and independently.
+We report floating-point experiments with the continuation rule on finite weighted Erd\H{o}s--R\'{e}nyi Max-Cut instances with $p=0.5$. Sampled graphs are required to be connected, and the generator retains instances whose reduced problem Hamiltonian is numerically found to have a nondegenerate ground state. The experiments assess conditional lower-bound envelopes rather than independently verified enclosures. The evaluation asks three questions: how much the shift-invariant constant improves earlier analytic estimates; how many paths the continuation resolves under its numerical assumptions; and what sparse-eigensolve workload is observed.
 
 \subsection{Problem Formulation, Symmetry Sectors, and Hamiltonians}
 The physical path is
@@ -425,7 +358,7 @@ H_{P,+}=U_+^\dagger H_P^{\mathrm{phys}}U_+,
 \qquad
 H_+(s)=(1-s)H_{I,+}+sH_{P,+}.
 \end{equation}
-Thus $d_+=2^N$. The labels $N\in\{10,12\}$ in the figures and tables denote effective qubits, corresponding to $n_v\in\{11,13\}$ physical vertices. If $E_{0,+}(s)\le E_{1,+}(s)\le\cdots$ are the reduced ordered eigenvalues, the computational gap is
+Thus $d_+=2^N$. The labels $N\in\{10,12,14\}$ in the figures and tables denote effective qubits, corresponding to $n_v\in\{11,13,15\}$ physical vertices. If $E_{0,+}(s)\le E_{1,+}(s)\le\cdots$ are the reduced ordered eigenvalues, the computational gap is
 \begin{equation}
 \Delta_+(s):=E_{1,+}(s)-E_{0,+}(s).
 \end{equation}
@@ -445,73 +378,156 @@ H_{P,+}=\sum_{j:(1,j)\in E}w_{1j}\frac{I+Z_{j-1}}{2}
 \end{equation}
 Both $H_{I,+}$ and $H_{P,+}$ are PSD.
 
-There is also a structural positivity fact specific to these benchmarks. In the basis~\eqref{eq:even-basis}, $H_+(s)$ has nonpositive off-diagonal entries for $0\le s<1$, and the single-bit-flip terms connect the full $N$-dimensional hypercube. After a sufficiently large scalar shift, $aI-H_+(s)$ is therefore entrywise nonnegative and irreducible. Perron--Frobenius implies that $H_+(s)$ has a unique ground state with strictly positive basis amplitudes for every $s<1$. The artifact verifier interprets each archived binary64 edge weight exactly, enumerates all $2^N$ pinned configurations, and confirms a unique endpoint minimum with a strictly positive exact second-cost gap for every archived graph. Hence $\Delta_+(1)>0$ for this exact-dyadic cohort; continuity on the compact interval gives $\min_s\Delta_+(s)>0$. Structural positivity therefore already establishes nonclosing for the archived mathematical instances. This known answer is the ground truth against which we test the more demanding quantitative task: producing replayable numerical lower bounds, identifying exactly which intervals they cover, and recording the work needed to do so.
+There is also a structural positivity fact specific to these benchmarks. In the basis~\eqref{eq:even-basis}, $H_+(s)$ has nonpositive off-diagonal entries for $0\le s<1$, and the single-bit-flip terms connect the full $N$-dimensional hypercube. After a sufficiently large scalar shift, $aI-H_+(s)$ is therefore entrywise nonnegative and irreducible. Perron--Frobenius implies that $H_+(s)$ has a unique ground state with strictly positive basis amplitudes for every $s<1$. This argument does not settle the endpoint $s=1$, where the off-diagonal driver terms vanish. Endpoint nondegeneracy is therefore treated numerically in the instance selection, consistently with the conditional scope of the experiments.
 
 \subsection{Endpoint-Only and Local Gap Bounds}
-We first form a conditional Weyl envelope from the available endpoint data. Figure~\ref{fig:no_anchors} compares that envelope with a sampled floating-point Ritz-gap curve.
-
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.88\textwidth]{comparison_updated_N10_no_anchors.png}
-\caption{Conditional Weyl endpoint envelope for one connected weighted $N=10$ instance (seed $0$). The black curve samples the floating-point reduced-sector Ritz gap $\Delta_+$ and is not a verified continuous-path curve.}
-\label{fig:no_anchors}
-\end{figure}
-
 Let
 \begin{equation}
 D_+:=H_{P,+}-H_{I,+},
 \qquad
 K_{\mathrm{gap},+}:=\lambda_{\max}(D_+)-\lambda_{\min}(D_+).
 \end{equation}
-A continuation input $K_{\mathrm{gap,cert}}$ must satisfy
+A continuation input $K_{\mathrm{gap}}^{\mathrm{ub}}$ must satisfy
 \begin{equation}
-0\le K_{\mathrm{gap},+}\le K_{\mathrm{gap,cert}},
+\label{eq:computational-lipschitz-input}
+0\le K_{\mathrm{gap},+}\le K_{\mathrm{gap}}^{\mathrm{ub}},
 \qquad
-|\Delta_+(t)-\Delta_+(s)|\le K_{\mathrm{gap,cert}}|t-s|.
+|\Delta_+(t)-\Delta_+(s)|\le K_{\mathrm{gap}}^{\mathrm{ub}}|t-s|.
 \end{equation}
-The endpoint cones can be informative near the boundaries but are often too conservative in the middle of the path.
+More generally, let $\mathcal A$ be a nonempty finite collection of anchors $(a,\underline\delta_a)$ satisfying
+\begin{equation}
+0\le \underline\delta_a\le\Delta_+(a),
+\qquad a\in[0,1].
+\end{equation}
+Applying Eq.~\eqref{eq:computational-lipschitz-input} at every anchor and taking the strongest resulting lower bound gives the Weyl envelope
+\begin{equation}
+\label{eq:conditional-weyl-envelope}
+\mathcal W_{\mathcal A}(s)
+:=\max_{(a,\underline\delta_a)\in\mathcal A}
+\left\{\underline\delta_a-K_{\mathrm{gap}}^{\mathrm{ub}}|s-a|\right\}
+\le\Delta_+(s).
+\end{equation}
+Because $\Delta_+(s)\ge0$, the clipped function $\max\{0,\mathcal W_{\mathcal A}(s)\}$ is also a lower bound and has the same strict-positivity set as $\mathcal W_{\mathcal A}$. For endpoint data we take
+\begin{equation}
+\mathcal A_{\mathrm{end}}
+=\{(0,2),(1,\underline\delta_P)\},
+\qquad
+0\le\underline\delta_P\le\Delta_+(1).
+\end{equation}
+In the experiments, $\underline\delta_P$ is the difference of the two lowest entries of the diagonal problem Hamiltonian and is treated as a lower bound conditional on the floating-point calculation. Figure~\ref{fig:no_anchors} compares $\mathcal W_{\mathcal A_{\mathrm{end}}}$ with a sampled floating-point Ritz-gap curve. The two endpoint cones can be informative near the boundaries but are often too conservative in the middle of the path.
 
-For the archived model, every stored binary64 edge weight is interpreted as an exact dyadic rational. Let
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.88\textwidth]{comparison_updated_N10_no_anchors.png}
+\caption{Conditional Weyl endpoint envelope $\mathcal W_{\mathcal A_{\mathrm{end}}}$ for one connected weighted $N=10$ instance (seed $0$). The black curve samples the floating-point reduced-sector Ritz gap $\Delta_+$ and is a diagnostic rather than a continuous-path lower bound.}
+\label{fig:no_anchors}
+\end{figure}
+
+\begin{proposition}[Analytic diameter bound for the reduced Max-Cut path]
+\label{prop:computational-diameter-bound}
+For positive edge weights, define
 \begin{equation}
-W_{\mathrm{exact}}:=\sum_{(i,j)\in E}w_{ij},
+W:=\sum_{(i,j)\in E}w_{ij},
 \qquad
-\Lambda_I:=2\left\lfloor\frac{n_v}{2}\right\rfloor,
+\Lambda_I:=2\left\lfloor\frac{n_v}{2}\right\rfloor.
 \end{equation}
-where the sum is taken in exact rational arithmetic. Then
+Then, in the Loewner order,
 \begin{equation}
-0\le H_{P,+}\le W_{\mathrm{exact}}I,
+\label{eq:endpoint-operator-order}
+0\le H_{P,+}\le WI,
 \qquad
 0\le H_{I,+}\le\Lambda_I I,
 \end{equation}
-and therefore
+and hence
 \begin{equation}
--\Lambda_I I\le D_+\le W_{\mathrm{exact}}I,
-\qquad
-K_{\mathrm{gap},+}\le W_{\mathrm{exact}}+\Lambda_I.
+\label{eq:D-operator-order}
+-\Lambda_I I\le D_+\le WI.
 \end{equation}
-The implementation first forms the least binary64 number $W_{\mathrm{upper}}\ge W_{\mathrm{exact}}$ and then the least binary64 number not below the exact dyadic sum $W_{\mathrm{upper}}+\Lambda_I$. Thus
+Consequently, any $K_{\mathrm{gap}}^{\mathrm{ub}}\ge W+\Lambda_I$ is a valid continuation input, since
 \begin{equation}
 \label{eq:computational-gap-bounds}
-\boxed{K_{\mathrm{gap,cert}}\ge W_{\mathrm{upper}}+\Lambda_I
-\ge W_{\mathrm{exact}}+\Lambda_I\ge K_{\mathrm{gap},+}.}
+K_{\mathrm{gap},+}\le W+\Lambda_I\le K_{\mathrm{gap}}^{\mathrm{ub}}.
 \end{equation}
-This is a direct spectral-width certificate with outward rounding. Unlike an uncentered spectral-norm comparison, it is invariant under scalar shifts of the interpolation direction, which cannot change a gap; the reported table is a tightness diagnostic for this analytic certificate, not a comparison with a competing continuation method. Table~\ref{tab:gap_diameter} compares its ensemble mean with ordinary floating-point estimates of the actual diameter $K_{\mathrm{gap},+}$.
+\end{proposition}
+
+\begin{proof}
+Write $H_{P,+}=\sum_{e\in E}w_e\Pi_e$. In the displayed formula for $H_{P,+}$, each $\Pi_e=(I+Q_e)/2$, where $Q_e$ is either a single $Z$ operator or a product of two $Z$ operators. Since $Q_e=Q_e^\dagger$ and $Q_e^2=I$, the operator $\Pi_e$ is an orthogonal projection. Thus $0\le\Pi_e\le I$, and summing with $w_e>0$ proves the first inequality in Eq.~\eqref{eq:endpoint-operator-order}.
+
+For the driver, an $X$-basis eigenvector of $H_I^{\mathrm{phys}}$ with $q$ single-qubit $\ket{-}$ factors has energy $q$ and global-spin-flip eigenvalue $(-1)^q$. Its restriction to the even sector therefore has $q\in\{0,2,\ldots,2\lfloor n_v/2\rfloor\}$. Unitary reduction by $U_+$ preserves this spectrum, proving the second inequality in Eq.~\eqref{eq:endpoint-operator-order}. Finally,
+\begin{equation}
+D_+=H_{P,+}-H_{I,+}\ge-H_{I,+}\ge-\Lambda_I I,
+\qquad
+D_+\le H_{P,+}\le WI,
+\end{equation}
+which proves Eq.~\eqref{eq:D-operator-order}. It follows that $\lambda_{\min}(D_+)\ge-\Lambda_I$ and $\lambda_{\max}(D_+)\le W$, so their difference is at most $W+\Lambda_I$.
+\end{proof}
+
+For the exact target Hamiltonian associated with an archived instance, each stored binary64 weight is interpreted as its exact dyadic value. The implementation first chooses the least binary64 number $W^\uparrow$ not below their exact sum and then chooses $K_{\mathrm{gap}}^{\mathrm{ub}}$ as the least binary64 number not below the exact quantity $W^\uparrow+\Lambda_I$. Thus the final represented value satisfies $K_{\mathrm{gap}}^{\mathrm{ub}}\ge W+\Lambda_I$ for that exact-weight target; no eigensolver estimate enters this analytic bound. The sparse code separately assembles each problem-diagonal entry by ordinary binary64 accumulation. Those entries approximate the target entries but are not outward enclosures of them, so the exact-target Loewner inequalities do not automatically become enclosure statements for the assembled floating-point matrix. The reported continuation therefore remains conditional on matrix construction and the numerical anchor quantities preserving the inequalities required by Eqs.~\eqref{eq:computational-lipschitz-input} and~\eqref{eq:conditional-weyl-envelope}. Table~\ref{tab:gap_diameter} compares the ensemble mean of $K_{\mathrm{gap}}^{\mathrm{ub}}$ with floating-point diameter estimates for the assembled path operator.
 
 \begin{table}[htbp]
 \centering
 \small
 \begin{tabular}{cccc}
 \toprule
-$N$ & Estimated $K_{\mathrm{gap},+}$ & $K_{\mathrm{gap,cert}}$ & Cert./estimated \\
+$N$ & Estimated $K_{\mathrm{gap},+}$ & $K_{\mathrm{gap}}^{\mathrm{ub}}$ & Upper/estimated \\
 \midrule
 \SectionSevenGapDiameterRows
 \bottomrule
 \end{tabular}
-\caption{Means over 20 connected instances at each size. The diameter column is an ordinary floating-point extremal-eigenvalue diagnostic, whereas $K_{\mathrm{gap,cert}}$ is the outward-rounded analytic upper bound in Eq.~\eqref{eq:computational-gap-bounds}.}
+\caption{Means over 20 connected instances at each size. The diameter column is a floating-point extremal-eigenvalue diagnostic, whereas $K_{\mathrm{gap}}^{\mathrm{ub}}$ is the analytic upper bound in Eq.~\eqref{eq:computational-gap-bounds}, evaluated numerically.}
 \label{tab:gap_diameter}
 \end{table}
 
-Table~\ref{tab:bound_comparison} isolates the gain in the propagation constant using the same archived instances. It compares the previous implementation-level estimate, a fair uncentered spectral-norm certificate, and the shift-invariant certificate. A smaller valid constant enlarges the interval propagated from a fixed anchor, but the reduction is not by itself a runtime or speedup guarantee.
+Table~\ref{tab:bound_comparison} compares three upper bounds on the same Lipschitz constant $K_{\mathrm{gap},+}$. To see where they come from, first applying the conventional norm estimate and then the triangle inequality gives
+\begin{equation}
+\label{eq:previous-propagation-bound}
+K_{\mathrm{gap},+}
+\le 2\norm{D_+}_2
+\le 2\bigl(\norm{H_{P,+}}_2+\norm{H_{I,+}}_2\bigr)
+\le 2(W+n_v).
+\end{equation}
+The last step uses $\norm{H_{P,+}}_2\le W$ and the unreduced driver ceiling $\norm{H_{I,+}}_2\le n_v$. This is the source of the column labelled ``Previous'': it reproduces the earlier implementation-level estimate but does not exploit either the exact even-sector ceiling $\Lambda_I\le n_v$ or cancellation between $H_{P,+}$ and $H_{I,+}$.
+
+A sharper estimate retains the conventional factor $2\norm{D_+}_2$ but bounds the norm of the difference directly. Equation~\eqref{eq:D-operator-order} gives
+\begin{equation}
+\label{eq:computational-uncentered-bound}
+\norm{D_+}_2
+=\max\{|\lambda_{\min}(D_+)|,|\lambda_{\max}(D_+)|\}
+\le\max\{W,\Lambda_I\},
+\end{equation}
+so the ``Uncentered'' column uses $2\max\{W,\Lambda_I\}$. Finally, the ``Shift-invariant'' column uses Proposition~\ref{prop:computational-diameter-bound}: the scalar part of $D_+$ is discarded and only its spectral width is bounded, giving $K_{\mathrm{gap},+}\le W+\Lambda_I$. For the numerical rows, $W$ is replaced by the upward-rounded $W^\uparrow$ described above, and the three recorded constants for each graph $G$ are
+\begin{equation}
+\label{eq:bound-comparison-constants}
+\begin{aligned}
+C_{\mathrm{prev}}(G)&:=2(W^\uparrow(G)+n_v),\\
+C_{\mathrm{unc}}(G)&:=2\max\{W^\uparrow(G),\Lambda_I\},\\
+C_{\mathrm{si}}(G)&:=K_{\mathrm{gap}}^{\mathrm{ub}}(G)
+=\operatorname{up}_{64}\!\bigl(W^\uparrow(G)+\Lambda_I\bigr),
+\end{aligned}
+\end{equation}
+where $\operatorname{up}_{64}(x)$ denotes the least binary64 number not smaller than $x$. Because $2\max\{W^\uparrow,\Lambda_I\}$ is itself representable and bounds $W^\uparrow+\Lambda_I$, while $\Lambda_I\le n_v$, these constants satisfy
+\begin{equation}
+K_{\mathrm{gap},+}
+\le C_{\mathrm{si}}(G)
+\le C_{\mathrm{unc}}(G)
+\le C_{\mathrm{prev}}(G).
+\end{equation}
+Thus the columns are directly comparable: each constant multiplies $|s-a|$ in the same propagated cone $\underline\delta_a-C|s-a|$. For a fixed valid anchor value $\underline\delta_a$, its guaranteed positive radius is $\underline\delta_a/C$, so a smaller constant gives a uniformly no-weaker propagation interval.
+
+For each size $N$, let $\mathcal G_N$ denote the 20-instance ensemble. The first three numerical columns are arithmetic means
+\begin{equation}
+\overline C_x(N):=\frac1{20}\sum_{G\in\mathcal G_N}C_x(G),
+\qquad x\in\{\mathrm{prev},\mathrm{unc},\mathrm{si}\},
+\end{equation}
+whereas each reduction column is the mean of the \emph{per-instance} relative reductions,
+\begin{equation}
+\label{eq:bound-comparison-reductions}
+\overline R_b(N)
+:=\frac{100}{20}\sum_{G\in\mathcal G_N}
+\frac{C_b(G)-C_{\mathrm{si}}(G)}{C_b(G)},
+\qquad b\in\{\mathrm{prev},\mathrm{unc}\}.
+\end{equation}
+Averaging the ratios gives every graph equal weight and prevents instances with larger total edge weight from dominating the relative comparison. These reductions quantify tightening of the propagation slope only; they are not by themselves runtime or speedup guarantees, because the continuation workload also depends on the anchor values and eigensolver behavior.
 \begin{table}[htbp]
 \centering
 \small
@@ -520,121 +536,82 @@ Table~\ref{tab:bound_comparison} isolates the gain in the propagation constant u
 \toprule
 $N$ & Previous & Uncentered & Shift-invariant & \multicolumn{2}{c}{Mean reduction} \\
 \cmidrule(r){5-6}
-& $2(W_{\mathrm{upper}}+n_v)$ & $2\max\{W_{\mathrm{upper}},\Lambda_I\}$ & $K_{\mathrm{gap,cert}}$ & vs. previous & vs. uncentered \\
+& $2(W^\uparrow+n_v)$ & $2\max\{W^\uparrow,\Lambda_I\}$ & $K_{\mathrm{gap}}^{\mathrm{ub}}$ & vs. previous & vs. uncentered \\
 \midrule
 \SectionSevenBoundComparisonRows
 \bottomrule
 \end{tabular}
-\caption{Mean valid analytic propagation constants over 20 instances at each size. Reduction columns are means of the per-instance percentage reduction achieved by $K_{\mathrm{gap,cert}}$. The previous column reproduces the earlier implementation-level estimate; the uncentered column is the sharper conventional certificate obtained from $2\norm{D_+}_2\le 2\max\{W_{\mathrm{upper}},\Lambda_I\}$.}
+\caption{Comparison of three upper bounds on the same gap-propagation slope. The first three entries are the ensemble means $\overline C_x(N)$, and the final two are the mean per-instance reductions $\overline R_b(N)$ from Eq.~\eqref{eq:bound-comparison-reductions}. The symbol $W^\uparrow$ denotes the upward-rounded exact dyadic weight sum used in the numerical records.}
 \label{tab:bound_comparison}
 \end{table}
 
-The generated summary also reports how often the endpoint-only bounds are positive on the fixed diagnostic grid.
-\begin{table}[htbp]
-\centering
-\small
-\begin{tabular}{cccc}
-\toprule
-$N$ & Weyl endpoint & PSD floor (oracle) & PSD floor (poly.) \\
-\midrule
-\SectionSevenCoverageRows
-\bottomrule
-\end{tabular}
-\caption{Mean sampled positive fractions over 20 instances at each size, evaluated on the 201-point diagnostic grid. The oracle PSD column uses full diagonal endpoint data; the polynomial-input column uses the spectral and greedy endpoint surrogates. These endpoint-only floating-point diagnostics are separate from the continuation interval classification.}
-\label{tab:endpoint_coverage}
-\end{table}
-
-\subsection{Anchor Calculations and Certification Levels}
-At each anchor $s_k$, SciPy's sparse Lanczos interface \texttt{eigsh} estimates the two lowest eigenpairs of $H_+(s_k)$. For reported Ritz pairs $(\theta_j,\ket{\psi_j})$, we monitor
+\subsection{Floating-Point Anchor Calculations}
+At each anchor $s_k$, SciPy's sparse Lanczos interface \texttt{eigsh} estimates the two lowest eigenpairs of $H_+(s_k)$. For normalized reported Ritz vectors, we monitor
 \begin{equation}
+\label{eq:ritz-residual}
 r_j=\norm{\bigl(H_+(s_k)-\theta_jI\bigr)\ket{\psi_j}}_2,
 \qquad j=0,1.
 \end{equation}
-For exact real-number inputs, the residual theorem gives
+The standard residual relation follows directly from the spectral theorem. Indeed, if $H_+(s_k)\ket{u_\ell}=E_{\ell,+}(s_k)\ket{u_\ell}$ and $\ket{\psi_j}=\sum_\ell c_\ell\ket{u_\ell}$, then
 \begin{equation}
-\operatorname{dist}\!\left(\theta_j,\operatorname{spec}H_+(s_k)\right)\le r_j.
+\begin{aligned}
+r_j^2
+&=\sum_\ell |c_\ell|^2
+\bigl(E_{\ell,+}(s_k)-\theta_j\bigr)^2\\
+&\ge
+\operatorname{dist}\!\left(\theta_j,
+\operatorname{spec}H_+(s_k)\right)^2
+\sum_\ell|c_\ell|^2.
+\end{aligned}
 \end{equation}
-This existence statement does not identify the nearby eigenvalue's index or show that no lower eigenvalue was missed. Likewise, the exact Rayleigh quotient of a normalized trial vector upper-bounds $E_{0,+}(s_k)$, but the reported $\theta_0$ and $r_j$ are floating-point quantities without outward rounding. Treating those reported values as valid mathematical bounds, and conditional on $\theta_1$ representing the first excited eigenvalue, motivates the implemented anchor quantity
+Normalization therefore gives
+\begin{equation}
+\operatorname{dist}\!\left(\theta_j,
+\operatorname{spec}H_+(s_k)\right)\le r_j.
+\end{equation}
+This statement only places \emph{some} eigenvalue in $[\theta_j-r_j,\theta_j+r_j]$; it neither identifies that eigenvalue's ordered index nor rules out an eigenvalue missed by the Krylov search.
+
+In exact Rayleigh--Ritz arithmetic,
+\begin{equation}
+\theta_0=\opvalue{\psi_0}{H_+(s_k)}{\psi_0}
+\quad\Longrightarrow\quad
+E_{0,+}(s_k)\le\theta_0
+\end{equation}
+by the variational principle, regardless of whether $\ket{\psi_0}$ is an accurate ground-state approximation. If, in addition, the ordered first excited energy is certified to lie in the second residual interval,
+\begin{equation}
+E_{1,+}(s_k)\in[\theta_1-r_1,\theta_1+r_1],
+\end{equation}
+then in particular
+\begin{equation}
+E_{1,+}(s_k)\ge\theta_1-r_1.
+\end{equation}
+and consequently
+\begin{equation}
+\Delta_+(s_k)
+\ge(\theta_1-r_1)-\theta_0.
+\end{equation}
+Combining this estimate with the universal inequality $\Delta_+(s_k)\ge0$ motivates the implemented anchor value
 \begin{equation}
 \label{eq:conditional-anchor}
 \Delta_{+,\mathrm{lo}}(s_k)
 :=\max\{0,(\theta_1-r_1)-\theta_0\}.
 \end{equation}
-The residual $r_0$ remains a convergence diagnostic but is not used in this formula. Equation~\eqref{eq:conditional-anchor} is therefore a conditional floating-point lower-bound estimate, not an independently verified indexed enclosure.
+This derivation also explains why $r_0$ is monitored but not subtracted: the Rayleigh quotient $\theta_0$ is already an upper bound on the ground energy in exact arithmetic. The implementation does not outward-round the Rayleigh quotient and residual norm, and the residual test does not certify the excited-state index. Thus $\Delta_{+,\mathrm{lo}}(s_k)$ remains a conditional floating-point lower-bound estimate, not an indexed eigenvalue enclosure; a certified variant would need both directed numerical enclosures and an independent index-certification argument.
 
-For clarity, the following certification levels are terminology defined for this study rather than an external community standard. We distinguish three levels:
-\begin{description}
-\item[Level 1: formal implication.] Theorems apply to mathematical inputs satisfying their stated inequalities.
-\item[Level 2: conditional floating-point continuation.] Sparse Ritz values and residual diagnostics supply routine sweep anchors without verified indexing or outward-rounded residual arithmetic.
-\item[Level 3.] \textbf{Replayable exact indexed anchor.} Exact-dyadic Hamiltonian data and witness specifications are checked by an independent exact-arithmetic program that proves the indexed inequalities with no acceptance tolerance.
-\end{description}
-All aggregate continuation rows in this paper are Level~2. The four listed anchors in the next subsection are Level~3 point certificates. Their exact bounds propagate to four rigorously verified continuous subintervals. In addition, the three separate records in Table~\ref{tab:level3-continuations} are complete Level~3 continuations across $[0,1]$.
-
-\subsection{Exact-Dyadic Level-3 Anchors and Verified Subintervals}
-
-Theorem~\ref{thm:exact-indexed-anchor} is applied to four seed-0 anchors. Archived binary64 edge weights, the binary64 parameter $s$, and both witness vectors are interpreted as exact dyadic rationals. SciPy is used only to propose a ground-state vector $q$, a strictly positive principal-submatrix witness $x$, a coordinate $p$, and a convenient $X$- or $Z$-basis representation; none of those floating-point proposals is trusted. The independent checker reconstructs the exact matrix, verifies $x>0$, evaluates $\ell$ and $U_0$ as rational numbers, and checks every scaled-diagonal-dominance inequality without an acceptance tolerance. A stored specification/result pair and the independent checker make each selected point verification replayable.
-
-These records imply more than isolated point claims. If the exact checker proves $\Delta_+(s_0)\ge\delta>0$, then Eq.~\eqref{eq:lipschitz-gap} and the archived rational inequality $K_{\mathrm{gap,cert}}\ge K_{\mathrm{gap},+}$ give
-\begin{equation}
-\label{eq:exact-anchor-subinterval}
-\Delta_+(s)\ge \delta-K_{\mathrm{gap,cert}}|s-s_0|.
-\end{equation}
-Consequently every closed interval strictly inside $|s-s_0|<\delta/K_{\mathrm{gap,cert}}$ is rigorously certified. Table~\ref{tab:level3-anchors} uses inward-rounded decimal endpoints and conservative decimal floors; all acceptance comparisons are performed on the authoritative rational quantities.
-
-\begin{table}[htbp]
-\centering
-\scriptsize
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{cccccc}
-\toprule
-$N$ & Binary64 input $s_0$ & Basis & Exact anchor bound $\delta$ & Verified closed subinterval & Interval lower bound \\
-\midrule
-10 & $0.1$ & $X$ & $1.220109841289$ & $[0.069004,\,0.130996]$ & $9.7\times10^{-6}$ \\
-10 & $0.4174116949186277$ & $Z$ & $0.159173111131$ & $[0.413368,\,0.421455]$ & $5.5\times10^{-7}$ \\
-12 & $0.1$ & $X$ & $1.064501314437$ & $[0.080131,\,0.119869]$ & $3.1\times10^{-5}$ \\
-12 & $0.5025125632610975$ & $Z$ & $0.067240247486$ & $[0.501258,\,0.503767]$ & $2.7\times10^{-5}$ \\
-\bottomrule
-\end{tabular}
-\caption{Four seed-0 replayable Level-3 anchors and the continuous subintervals obtained from Eq.~\eqref{eq:exact-anchor-subinterval}. Anchor bounds are decimal approximations to exact rational values $\ell-U_0>0$. Interval endpoints are rounded inward and the final column is rounded downward from the exact propagated minimum. The intervals are rigorous but do not cover either full path.}
-\label{tab:level3-anchors}
-\end{table}
-
-\subsection{Complete Level-3 Continuations for Three \texorpdfstring{$N=10$}{N=10} Instances}
-
-The point certificates above establish the local mechanism. We next apply the same exact checker repeatedly to three archived $N=10$ graphs, selected before this exact run as relatively short conditional sweeps (seeds 18, 4, and 10). Each continuation starts from the analytic reduced-driver identity $\Delta_+(0)=2$. At every subsequent binary64 parameter value, SciPy proposes an $X$- or $Z$-basis witness, but acceptance uses only the exact-dyadic comparison-matrix calculation. The next anchor is placed strictly inside the previously certified union. Thus consecutive propagated intervals overlap by a nonzero exact amount. For seed 10, exact enumeration of the diagonal problem endpoint supplies the final anchor; for seeds 18 and 4, the last comparison-matrix interval already extends beyond $s=1$.
-
-The separate continuation verifier rechecks every witness hash and every exact anchor calculation, reconstructs $K_{\mathrm{gap,cert}}$ from the archived graph record, and rejects unless the union of intervals strictly covers $[0,1]$. Table~\ref{tab:level3-continuations} reports the independently replayed records. The final coverage values are deliberately left unclipped: a value greater than one proves positivity at the physical endpoint rather than only on a half-open interval.
-
-\begin{table}[htbp]
-\centering
-\small
-\begin{tabular}{ccccc}
-\toprule
-$N$ & Seed & Comparison-matrix anchors & Endpoint closure & Final exact coverage right \\
-\midrule
-10 & 18 & 119 & Last comparison interval & $1.026788731492$ \\
-10 & 4  & 186 & Last comparison interval & $1.034263289700$ \\
-10 & 10 & 195 & Exact enumerated $H_{P,+}$ gap & $1.042920856755$ \\
-\bottomrule
-\end{tabular}
-\caption{Complete replayable Level-3 continuations. Every displayed path begins with the exact driver anchor $\Delta_+(0)=2$; all intervals overlap strictly and their union covers $[0,1]$. The comparison-anchor counts exclude the analytic endpoint anchors.}
-\label{tab:level3-continuations}
-\end{table}
-
-Figure~\ref{fig:with_anchors} shows how additional Level-2 anchors change the conditional envelope for one instance.
+Figure~\ref{fig:with_anchors} shows how additional floating-point anchors change the conditional envelope for one instance.
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.88\textwidth]{comparison_updated_N10_anchors.png}
-\caption{Budgeted conditional Weyl envelopes for one connected weighted $N=10$ instance (seed $0$). Each panel uses at most the stated number of sparse eigensolves plus endpoint information. The black curve is a sampled reduced-sector Ritz-gap reference $\Delta_+$; neither curve is a verified continuous-path enclosure.}
+\caption{Budgeted conditional Weyl envelopes for one connected weighted $N=10$ instance (seed $0$). Each panel uses at most the stated number of sparse eigensolves plus endpoint information. The black curve is a sampled reduced-sector Ritz-gap reference $\Delta_+$; it is a diagnostic rather than a continuous-path lower bound.}
 \label{fig:with_anchors}
 \end{figure}
 
-Each Level-2 anchor uses two Ritz values, residual diagnostics, and the supplied direct $K_{\mathrm{gap,cert}}$. Sparse Krylov methods avoid full dense diagonalization, but their cost depends on sparsity, tolerance, spectral separation, and warm-start quality; no linear-time eigensolve claim is made.
+Each anchor uses two Ritz values, residual diagnostics, and the supplied $K_{\mathrm{gap}}^{\mathrm{ub}}$. Sparse Krylov methods avoid full dense diagonalization, but their cost depends on sparsity, tolerance, spectral separation, and warm-start quality; no linear-time eigensolve claim is made.
 
 \subsection{Adaptive Continuation with Exponential Mark-and-Probe}
-Let $\eta\in(0,1)$, $h_{\mathrm{floor}}>0$, and $K_{\mathrm{gap,cert}}\ge0$. For $K_{\mathrm{gap,cert}}>0$, the ordinary proposal at $s_k$ is
+Let $\eta\in(0,1)$, $h_{\mathrm{floor}}>0$, and $K_{\mathrm{gap}}^{\mathrm{ub}}\ge0$. For $K_{\mathrm{gap}}^{\mathrm{ub}}>0$, the ordinary proposal at $s_k$ is
 \begin{equation}
-h_k^{\mathrm{prop}}:=\eta\frac{\Delta_{+,\mathrm{lo}}(s_k)}{K_{\mathrm{gap,cert}}},
+h_k^{\mathrm{prop}}:=\eta\frac{\Delta_{+,\mathrm{lo}}(s_k)}{K_{\mathrm{gap}}^{\mathrm{ub}}},
 \end{equation}
 and the recorded floor-overridden length is
 \begin{equation}
@@ -651,7 +628,7 @@ where $q_k$ is the number of consecutive preceding floor triggers. An ordinary a
 \begin{equation}
 h_k^{\mathrm{act}}:=\min\{h_k^{\mathrm{probe}},1-s_k\},
 \qquad
-B_k:=\Delta_{+,\mathrm{lo}}(s_k)-K_{\mathrm{gap,cert}}h_k^{\mathrm{act}}.
+B_k:=\Delta_{+,\mathrm{lo}}(s_k)-K_{\mathrm{gap}}^{\mathrm{ub}}h_k^{\mathrm{act}}.
 \end{equation}
 The actual interval is conditionally resolved if and only if $B_k>0$; a probe is not automatically unresolved merely because the floor triggered.
 
@@ -661,7 +638,7 @@ The actual interval is conditionally resolved if and only if $B_k>0$; a probe is
 \textbf{Algorithm 1: Adaptive continuation with mark-and-probe}
 
 \smallskip
-\textbf{Inputs:} $H_+(s)$; $K_{\mathrm{gap,cert}}\ge0$; $\eta\in(0,1)$; $h_{\mathrm{floor}}>0$; an anchor routine returning finite $\Delta_{+,\mathrm{lo}}(s)\ge0$.
+\textbf{Inputs:} $H_+(s)$; $K_{\mathrm{gap}}^{\mathrm{ub}}\ge0$; $\eta\in(0,1)$; $h_{\mathrm{floor}}>0$; an anchor routine returning finite $\Delta_{+,\mathrm{lo}}(s)\ge0$.
 
 \textbf{Outputs:} Anchors $\mathcal A$, interval records $\mathcal S$, and unresolved windows $\mathcal U$.
 
@@ -670,10 +647,10 @@ The actual interval is conditionally resolved if and only if $B_k>0$; a probe is
     \item \textbf{While} $s<1$:
     \begin{enumerate}[label=\alph*., leftmargin=1.8em, itemsep=0.2em, topsep=0.2em]
         \item Obtain $\delta\leftarrow\Delta_{+,\mathrm{lo}}(s)$ and add $(s,\delta)$ to $\mathcal A$.
-        \item \textbf{If} $K_{\mathrm{gap,cert}}=0$, set
+        \item \textbf{If} $K_{\mathrm{gap}}^{\mathrm{ub}}=0$, set
         $h^{\mathrm{prop}}=h^{\mathrm{floor}}=h^{\mathrm{probe}}\leftarrow1-s$
         and $q\leftarrow0$.
-        \item \textbf{Otherwise}, set $h^{\mathrm{prop}}\leftarrow\eta\delta/K_{\mathrm{gap,cert}}$ and $h^{\mathrm{floor}}\leftarrow\max\{h^{\mathrm{prop}},h_{\mathrm{floor}}\}$.
+        \item \textbf{Otherwise}, set $h^{\mathrm{prop}}\leftarrow\eta\delta/K_{\mathrm{gap}}^{\mathrm{ub}}$ and $h^{\mathrm{floor}}\leftarrow\max\{h^{\mathrm{prop}},h_{\mathrm{floor}}\}$.
         If $h^{\mathrm{prop}}<h_{\mathrm{floor}}$, mark a floor trigger and set
         \begin{equation*}
         h^{\mathrm{probe}}\leftarrow
@@ -682,7 +659,7 @@ The actual interval is conditionally resolved if and only if $B_k>0$; a probe is
         \qquad q\leftarrow q+1.
         \end{equation*}
         Otherwise use the normal adaptive step $h^{\mathrm{probe}}\leftarrow h^{\mathrm{prop}}$ and set $q\leftarrow0$.
-        \item Apply the endpoint clip $h^{\mathrm{act}}\leftarrow\min\{h^{\mathrm{probe}},1-s\}$ and calculate $B\leftarrow\delta-K_{\mathrm{gap,cert}}h^{\mathrm{act}}$.
+        \item Apply the endpoint clip $h^{\mathrm{act}}\leftarrow\min\{h^{\mathrm{probe}},1-s\}$ and calculate $B\leftarrow\delta-K_{\mathrm{gap}}^{\mathrm{ub}}h^{\mathrm{act}}$.
         \item Classify $[s,s+h^{\mathrm{act}}]$ as conditionally resolved iff $B>0$; otherwise add it to $\mathcal U$. Record the proposed, floor-overridden, probe-planned, and actual lengths and the classification fields in $\mathcal S$, then update $s\leftarrow s+h^{\mathrm{act}}$.
     \end{enumerate}
     \item \textbf{Return} $\mathcal A$, $\mathcal S$, and the merged windows $\mathcal U$.
@@ -691,11 +668,11 @@ The actual interval is conditionally resolved if and only if $B_k>0$; a probe is
 }
 \end{center}
 
-A valid $K_{\mathrm{gap,cert}}=0$ means that $D_+$ is scalar and $\Delta_+$ is constant. The explicit branch therefore advances to the endpoint without division and classifies the interval from $B_k=\Delta_{+,\mathrm{lo}}(s_k)$.
+A valid $K_{\mathrm{gap}}^{\mathrm{ub}}=0$ means that $D_+$ is scalar and $\Delta_+$ is constant. The explicit branch therefore advances to the endpoint without division and classifies the interval from $B_k=\Delta_{+,\mathrm{lo}}(s_k)$.
 
 \begin{theorem}[Conditional Positivity from the Actual Step]
 \label{thm:continuation-positivity}
-Assume $0\le K_{\mathrm{gap},+}\le K_{\mathrm{gap,cert}}$ and that an interval starts from a valid anchor bound
+Assume $0\le K_{\mathrm{gap},+}\le K_{\mathrm{gap}}^{\mathrm{ub}}$ and that an interval starts from a valid anchor bound
 \begin{equation}
 0\le\Delta_{+,\mathrm{lo}}(s_k)\le\Delta_+(s_k).
 \end{equation}
@@ -703,27 +680,27 @@ Then, for every $s\in[s_k,s_{k+1}]$,
 \begin{equation}
 \label{eq:actual-step-bound}
 \Delta_+(s)\ge B_k
-=\Delta_{+,\mathrm{lo}}(s_k)-K_{\mathrm{gap,cert}}h_k^{\mathrm{act}}.
+=\Delta_{+,\mathrm{lo}}(s_k)-K_{\mathrm{gap}}^{\mathrm{ub}}h_k^{\mathrm{act}}.
 \end{equation}
-Consequently, the classification accepts exactly intervals with $B_k>0$, and every accepted interval is conditionally positive. If $K_{\mathrm{gap,cert}}>0$ and the step is an ordinary adaptive step, then
+Consequently, the classification accepts exactly intervals with $B_k>0$, and every accepted interval is conditionally positive. If $K_{\mathrm{gap}}^{\mathrm{ub}}>0$ and the step is an ordinary adaptive step, then
 \begin{equation}
 B_k\ge(1-\eta)\Delta_{+,\mathrm{lo}}(s_k).
 \end{equation}
-For an accepted floor-triggered probe, positivity follows directly from $B_k>0$; no $(1-\eta)\Delta_{+,\mathrm{lo}}(s_k)$ bound is asserted. If $K_{\mathrm{gap,cert}}=0$, then $B_k=\Delta_{+,\mathrm{lo}}(s_k)$.
+For an accepted floor-triggered probe, positivity follows directly from $B_k>0$; no $(1-\eta)\Delta_{+,\mathrm{lo}}(s_k)$ bound is asserted. If $K_{\mathrm{gap}}^{\mathrm{ub}}=0$, then $B_k=\Delta_{+,\mathrm{lo}}(s_k)$.
 \end{theorem}
 
 \begin{proof}
 Theorem~\ref{thm:lipschitz-gap} gives
 \begin{equation}
 \Delta_+(s)\ge\Delta_{+,\mathrm{lo}}(s_k)
--K_{\mathrm{gap,cert}}(s-s_k)
+-K_{\mathrm{gap}}^{\mathrm{ub}}(s-s_k)
 \ge\Delta_{+,\mathrm{lo}}(s_k)
--K_{\mathrm{gap,cert}}h_k^{\mathrm{act}}=B_k.
+-K_{\mathrm{gap}}^{\mathrm{ub}}h_k^{\mathrm{act}}=B_k.
 \end{equation}
 The classification implication is immediate. For an ordinary adaptive step, endpoint clipping gives
 \begin{equation}
 h_k^{\mathrm{act}}\le h_k^{\mathrm{prop}}
-=\eta\Delta_{+,\mathrm{lo}}(s_k)/K_{\mathrm{gap,cert}},
+=\eta\Delta_{+,\mathrm{lo}}(s_k)/K_{\mathrm{gap}}^{\mathrm{ub}},
 \end{equation}
 which yields the stated safety-factor bound. A probe can be longer than $h_k^{\mathrm{prop}}$, so only its explicitly computed $B_k$ is used. The zero-constant case follows by substitution.
 \end{proof}
@@ -742,21 +719,21 @@ N_{\mathrm{int}}\le
 \begin{cases}
 \displaystyle
 \left\lceil
-\frac{1}{\max\{h_{\mathrm{floor}},\eta\delta_{\mathrm{lo}}/K_{\mathrm{gap,cert}}\}}
-\right\rceil,&K_{\mathrm{gap,cert}}>0,\\[1.2ex]
-1,&K_{\mathrm{gap,cert}}=0.
+\frac{1}{\max\{h_{\mathrm{floor}},\eta\delta_{\mathrm{lo}}/K_{\mathrm{gap}}^{\mathrm{ub}}\}}
+\right\rceil,&K_{\mathrm{gap}}^{\mathrm{ub}}>0,\\[1.2ex]
+1,&K_{\mathrm{gap}}^{\mathrm{ub}}=0.
 \end{cases}
 \end{equation}
 \end{theorem}
 \begin{proof}
-For $K_{\mathrm{gap,cert}}>0$, an ordinary probe-planned length is at least $h_{\mathrm{floor}}$, while Eq.~\eqref{eq:probe-plan} makes a floor-triggered probe at least $\max\{h_{\mathrm{floor}},0.001\}\ge h_{\mathrm{floor}}$. Every non-final actual step equals its probe-planned length; only the final step can be shortened by endpoint clipping. This proves Eq.~\eqref{eq:unconditional-termination}. If all returned anchor quantities are at least $\delta_{\mathrm{lo}}$, every ordinary proposal is at least $\eta\delta_{\mathrm{lo}}/K_{\mathrm{gap,cert}}$, and a floor-triggered probe occurs only when that proposal is below $h_{\mathrm{floor}}$. Hence every non-final step is at least $\max\{h_{\mathrm{floor}},\eta\delta_{\mathrm{lo}}/K_{\mathrm{gap,cert}}\}$, proving Eq.~\eqref{eq:refined-termination}. If $K_{\mathrm{gap,cert}}=0$, the explicit branch advances directly to $s=1$ in one interval.
+For $K_{\mathrm{gap}}^{\mathrm{ub}}>0$, an ordinary probe-planned length is at least $h_{\mathrm{floor}}$, while Eq.~\eqref{eq:probe-plan} makes a floor-triggered probe at least $\max\{h_{\mathrm{floor}},0.001\}\ge h_{\mathrm{floor}}$. Every non-final actual step equals its probe-planned length; only the final step can be shortened by endpoint clipping. This proves Eq.~\eqref{eq:unconditional-termination}. If all returned anchor quantities are at least $\delta_{\mathrm{lo}}$, every ordinary proposal is at least $\eta\delta_{\mathrm{lo}}/K_{\mathrm{gap}}^{\mathrm{ub}}$, and a floor-triggered probe occurs only when that proposal is below $h_{\mathrm{floor}}$. Hence every non-final step is at least $\max\{h_{\mathrm{floor}},\eta\delta_{\mathrm{lo}}/K_{\mathrm{gap}}^{\mathrm{ub}}\}$, proving Eq.~\eqref{eq:refined-termination}. If $K_{\mathrm{gap}}^{\mathrm{ub}}=0$, the explicit branch advances directly to $s=1$ in one interval.
 \end{proof}
 Here $N_{\mathrm{int}}$ counts accepted and unresolved intervals. With one anchor solve at the start of each interval, the recorded solve count equals $N_{\mathrm{int}}$; an independent terminal-endpoint solve would add one. The refined termination hypothesis concerns returned quantities only and does not assert that they are valid lower bounds on $\Delta_+$.
 
-\subsection{Schema-4 Conditional Records and Exact Anchor Records}
-For an interval starting at $s_k$, the schema-4 conditional log records
+\subsection{Continuation Records}
+For an interval starting at $s_k$, the implementation records
 \begin{equation}
-\mathcal C_k=\bigl(s_k,s_{k+1},\delta_k,K_{\mathrm{gap,cert}},
+\mathcal C_k=\bigl(s_k,s_{k+1},\delta_k,K_{\mathrm{gap}}^{\mathrm{ub}},
  h_k^{\mathrm{prop}},h_k^{\mathrm{floor}},h_k^{\mathrm{probe}},
  h_k^{\mathrm{act}},f_k^{\mathrm{floor}},f_k^{\mathrm{clip}},m_k,B_k,\rho_k\bigr),
 \end{equation}
@@ -765,41 +742,48 @@ where the four length entries correspond to \texttt{h\_proposed}, \texttt{h\_flo
 h_k^{\mathrm{act}}=\min\{h_k^{\mathrm{probe}},1-s_k\}
 =s_{k+1}-s_k,
 \qquad
-B_k=\delta_k-K_{\mathrm{gap,cert}}h_k^{\mathrm{act}},
+B_k=\delta_k-K_{\mathrm{gap}}^{\mathrm{ub}}h_k^{\mathrm{act}},
 \qquad
 \rho_k=\mathrm{resolved}\Longleftrightarrow B_k>0.
 \end{equation}
-For a floor trigger, a verifier reconstructs the consecutive-trigger exponent $q_k$ from the preceding flags and checks Eq.~\eqref{eq:probe-plan}, the probe cap, and endpoint clipping. For an ordinary step it checks $h_k^{\mathrm{floor}}=h_k^{\mathrm{probe}}=h_k^{\mathrm{prop}}$. These algebraic checks prove propagation only if the anchor inequality $\delta_k\le\Delta_+(s_k)$ is valid.
+For a floor trigger, the preceding flags determine the consecutive-trigger exponent $q_k$, allowing Eq.~\eqref{eq:probe-plan}, the probe cap, and endpoint clipping to be checked. For an ordinary step, $h_k^{\mathrm{floor}}=h_k^{\mathrm{probe}}=h_k^{\mathrm{prop}}$. These algebraic consistency checks support reconstruction of the traversed intervals, but the propagated lower bounds remain conditional on $\delta_k\le\Delta_+(s_k)$ and $K_{\mathrm{gap},+}\le K_{\mathrm{gap}}^{\mathrm{ub}}$.
 
-Each Level-2 log has schema version \SectionSevenResultSchema{} and stores the exact numerator and denominator of $W_{\mathrm{exact}}$, $W_{\mathrm{upper}}$, and $K_{\mathrm{gap,cert}}$, together with the direct derivation in Eq.~\eqref{eq:computational-gap-bounds}; Ritz values and residuals; solver and probe policies; complete interval records; graph hashes; and provenance. The Level-2 logs do not verify their own eigenvalue indices. The four Level-3 anchor specifications and results are separate replayable records containing exact hashes, exact rational $U_0$, $\ell$, and $\ell-U_0$, and all no-tolerance comparison checks. The separate continuation manifest contains the corresponding accepted anchors for seeds 18, 4, and 10; its verifier recomputes every exact inequality and checks strict interval overlap through the endpoint. These records verify Table~\ref{tab:level3-continuations} while leaving the aggregate sweeps at Level~2.
+The stored outputs include the Ritz values and residual diagnostics, solver and probe policies, complete interval records, graph identifiers, and run provenance. They make the numerical continuation reproducible but do not establish eigenvalue indexing or enclosure arithmetic.
 
-\begin{figure}[htbp] \centering \includegraphics[width=\textwidth]{efficiency_comparison.png} \caption{Secondary workload diagnostic: sparse-eigensolve counts for the adaptive continuation sweep and a fixed-grid reference, over 20 connected instances at each displayed size (seeds 0--19). Bars show medians and error bars show interquartile ranges. Because the outputs and guarantees are unmatched, this figure is not evidence of speedup or superior certification effectiveness.} \label{fig:efficiency} \end{figure}
+\begin{figure}[htbp] \centering \includegraphics[width=\textwidth]{efficiency_comparison.png} \caption{Secondary workload diagnostic: sparse-eigensolve counts for the adaptive continuation sweep and a fixed-grid reference, over 20 connected instances at each displayed size (seeds 0--19). Bars show medians and error bars show interquartile ranges. Because the outputs and guarantees are unmatched, this figure is not evidence of speedup or superior coverage effectiveness.} \label{fig:efficiency} \end{figure}
 
-\begin{figure}[htbp] \centering \includegraphics[width=\textwidth]{grid_density_vs_gap.png} \caption{Adaptive and fixed-grid solve locations relative to a sampled floating-point reduced-sector Ritz-gap curve $\Delta_+$ for the connected $N=10$, seed-0 instance. The plot visualizes placement only; it is not a verified gap plot.} \label{fig:grid_N10} \end{figure}
+\begin{figure}[htbp] \centering \includegraphics[width=\textwidth]{grid_density_vs_gap.png} \caption{Adaptive and fixed-grid solve locations relative to a sampled floating-point reduced-sector Ritz-gap curve $\Delta_+$ for the connected $N=10$, seed-0 instance. The plot visualizes placement only and is not a continuous-path lower bound.} \label{fig:grid_N10} \end{figure}
 
-Figures~\ref{fig:grid_N10} and \ref{fig:grid_N12} visualize the solve locations for the seed-0 instances. In these examples, adaptive locations are denser in portions of the sampled curve with smaller Ritz gaps. Each location still requires a sparse eigensolve, whose cost depends on convergence as well as call count.
+Figures~\ref{fig:grid_N10}--\ref{fig:grid_N14} visualize the solve locations for the seed-0 instances. In these examples, adaptive locations are denser in portions of the sampled curve with smaller Ritz gaps. Each location still requires a sparse eigensolve, whose cost depends on convergence as well as call count.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\textwidth]{grid_density_vs_gap_N12.png}
-\caption{Adaptive and fixed-grid solve locations relative to a sampled floating-point reduced-sector Ritz-gap curve $\Delta_+$ for the connected $N=12$, seed-0 instance. The plot visualizes placement only; it is not a verified gap plot.}
+\caption{Adaptive and fixed-grid solve locations relative to a sampled floating-point reduced-sector Ritz-gap curve $\Delta_+$ for the connected $N=12$, seed-0 instance. The plot visualizes placement only and is not a continuous-path lower bound.}
 \label{fig:grid_N12}
 \end{figure}
 
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{grid_density_vs_gap_N14.png}
+\caption{Adaptive and fixed-grid solve locations relative to a sampled floating-point reduced-sector Ritz-gap curve $\Delta_+$ for the connected $N=14$, seed-0 instance. The plot visualizes placement only and is not a continuous-path lower bound.}
+\label{fig:grid_N14}
+\end{figure}
 
-The adaptive and fixed-grid constructions distribute evaluations differently. In the regenerated sample, the adaptive call count can be smaller or larger than the selected fixed-grid workload; narrow sampled gaps can lead to many adaptive calls. We therefore treat this comparison only as descriptive implementation context. A claim about relative effectiveness would require a matched target such as equal certified coverage, equal lower-bound margin, or coverage as a function of eigensolve or matvec budget.
 
-\subsubsection{Experimental Specification and Setup}
+The adaptive and fixed-grid constructions distribute evaluations differently. In the regenerated sample, the adaptive call count can be smaller or larger than the selected fixed-grid workload; narrow sampled gaps can lead to many adaptive calls. We therefore treat this comparison only as descriptive implementation context. A claim about relative effectiveness would require a matched target such as equal resolved coverage, equal lower-bound margin, or coverage as a function of eigensolve or matvec budget.
+
+\subsection{Experimental Specification and Setup}
 We assess the lower-bound output and workload of Algorithm~1 under the following setup:
 \begin{itemize}
     \item \textbf{Graph generation:} Weighted Erd\H{o}s--R\'{e}nyi graphs $G(n_v,p=0.5)$ have $n_v=N+1$ physical vertices, so $\dim\mathcal H_+=2^N$. Edge weights are independent draws from $[0.5,1.5]$.
-    \item \textbf{Instance filtering:} Instances are resampled until the graph is connected and a floating-point reduced-sector calculation reports a nondegenerate problem ground state. As an independent artifact check, exact dyadic enumeration confirms endpoint nondegeneracy for all 40 retained graphs.
-    \item \textbf{Eigensolvers and parameters:} Level-2 anchors and spectral-diameter diagnostics use \texttt{eigsh} with tolerance $10^{-10}$; anchors use $k=2$, \texttt{which='SA'}, \texttt{ncv}$=\min(d_+,50)$, SciPy's default maximum-iteration policy, a deterministic initial vector, and the previous ground-state Ritz vector as the next warm start. An ARPACK nonconvergence exception terminates the affected run. The sweep uses $\eta=0.9$, $h_{\mathrm{floor}}=10^{-6}$, the direct outward-rounded $K_{\mathrm{gap,cert}}$ from Eq.~\eqref{eq:computational-gap-bounds}, and mark-and-probe scales $10^{-3}$ and $0.05$. The auxiliary fixed-grid workload uses $\delta_{\mathrm{ref}}=0.25$.
+    \item \textbf{Instance filtering:} Instances are resampled until the graph is connected and a floating-point reduced-sector calculation reports a nondegenerate problem ground state.
+    \item \textbf{Eigensolvers and parameters:} Anchors and spectral-diameter diagnostics use \texttt{eigsh} with tolerance $10^{-10}$; anchors use $k=2$, \texttt{which='SA'}, \texttt{ncv}$=\min(d_+,50)$, SciPy's default maximum-iteration policy, a deterministic initial vector, and the previous ground-state Ritz vector as the next warm start. An ARPACK nonconvergence exception terminates the affected run. The sweep uses $\eta=0.9$, $h_{\mathrm{floor}}=10^{-6}$, the numerically evaluated $K_{\mathrm{gap}}^{\mathrm{ub}}$ from Eq.~\eqref{eq:computational-gap-bounds}, and mark-and-probe scales $10^{-3}$ and $0.05$. The auxiliary fixed-grid workload uses $\delta_{\mathrm{ref}}=0.25$.
     \item \textbf{Hardware and software:} The implementation uses Python 3.12.10 and was run on a standard desktop computer with a 12th Gen Intel(R) Core(TM) i5-1245U and 16 GB of RAM. Eigensolve wall-clock times are a secondary performance metric.
 \end{itemize}
 
-\subsubsection{Performance Statistics}
-The following tables import their rows from \texttt{results/section7\_summary.tex}, generated from \SectionSevenInstanceCount{} validated schema-\SectionSevenResultSchema{} instance rows.
+\subsection{Performance Statistics}
+The following tables import their rows from \texttt{results/section7\_summary.tex}, generated from \SectionSevenInstanceCount{} instance rows.
 
 \begin{table}[htbp]
 \centering
@@ -814,7 +798,7 @@ $N$ & \multicolumn{2}{c}{Sparse-eigensolve calls} & \multicolumn{4}{c}{Relative 
 \SectionSevenSolveCountRows
 \bottomrule
 \end{tabular}
-\caption{Solve-count workload over 20 instances at each size. Counts are median / mean $\pm$ population SD. Negative relative changes mean that mark-and-probe continuation used more calls. The uniform grid uses $h_{\mathrm{uniform}}=\delta_{\mathrm{ref}}/K_{\mathrm{gap,cert}}$ as a workload reference, not a matched-certification baseline.}
+\caption{Solve-count workload over 20 instances at each size. Counts are median / mean $\pm$ population SD. Negative relative changes mean that mark-and-probe continuation used more calls. The uniform grid uses $h_{\mathrm{uniform}}=\delta_{\mathrm{ref}}/K_{\mathrm{gap}}^{\mathrm{ub}}$ as a workload reference, not a matched-coverage baseline.}
 \label{tab:anchor_stats}
 \end{table}
 
@@ -829,7 +813,7 @@ $N$ & Globally resolved & Mean lower bound & Minimum & Maximum \\
 \SectionSevenGlobalConditionalRows
 \bottomrule
 \end{tabular}
-\caption{Global Level-2 conditional gap lower bounds. For $N=12$, the ensemble mean includes the unresolved run with reported value zero. These quantities remain conditional on the sparse-anchor indexing assumptions.}
+\caption{Global conditional gap lower bounds. For $N=12$, the ensemble mean includes the unresolved run with reported value zero. These quantities remain conditional on the sparse-anchor indexing and numerical-arithmetic assumptions.}
 \label{tab:global-conditional}
 \end{table}
 
@@ -843,35 +827,35 @@ $N$ & Continuation-resolved & Mean windows & Mean width & Maximum width \\
 \SectionSevenUnresolvedRows
 \bottomrule
 \end{tabular}
-\caption{Merged unresolved-window statistics. The sole unresolved $N=12$ sweep contains one width-$0.001$ mark-and-probe window; it is not a sequence of hundreds of microscopic floor steps. ``Continuation-resolved'' refers only to the Level-2 interval classification.}
+\caption{Merged unresolved-window statistics. The sole unresolved $N=12$ sweep contains one width-$0.001$ mark-and-probe window; it is not a sequence of hundreds of microscopic floor steps. ``Continuation-resolved'' refers to the conditional interval classification.}
 \label{tab:unresolved_stats}
 \end{table}
 
-The $N=12$ call-count distribution is skewed by the two largest runs: 2153 adaptive calls for seed 9 and 1439 for seed 13. The seed-13 run contains the sole unresolved mark-and-probe interval, of width $0.001$. These are observed workloads, not complexity bounds. Exponential probes reduce redundant floor-region solves while retaining the full unresolved mark whenever the actual-length bound is nonpositive.
+The $N=12$ call-count distribution is skewed by the two largest runs: 2153 adaptive calls for seed 9 and 1439 for seed 13. The seed-13 run contains the sole unresolved mark-and-probe interval, of width $0.001$. At $N=14$, all 20 paths are conditionally resolved; the mean global lower bound is $1.983\times10^{-2}$ and the smallest is $3.413\times10^{-3}$. The largest $N=14$ workload is 772 adaptive calls for seed 7, while the next largest is 297. These are observed workloads, not complexity bounds. Exponential probes reduce redundant floor-region solves while retaining the full unresolved mark whenever the actual-length bound is nonpositive.
 
-The data show instance-dependent workload rather than a uniform speedup. The sampled $\Delta_+$ curves are visual diagnostics, and the global values in Table~\ref{tab:global-conditional} quantify the reach of the conditional continuation bounds. Table~\ref{tab:gap_diameter} shows the conservatism of the direct outward-rounded $K_{\mathrm{gap,cert}}$ relative to floating-point diameter estimates. Anchor count alone does not determine wall-clock cost because Krylov convergence and warm-start quality also vary.
+The data show instance-dependent workload rather than a uniform speedup. In particular, the median adaptive count rises from 170.5 at $N=12$ to 213.0 at $N=14$, whereas the corresponding mean falls from 330.85 to 232.75 because of the two extreme $N=12$ runs. This nonmonotonic three-size summary is not a scaling law. The sampled $\Delta_+$ curves are visual diagnostics, and the global values in Table~\ref{tab:global-conditional} quantify the reach of the conditional continuation bounds. Table~\ref{tab:gap_diameter} shows the conservatism of $K_{\mathrm{gap}}^{\mathrm{ub}}$ relative to floating-point diameter estimates. Anchor count alone does not determine wall-clock cost because Krylov convergence and warm-start quality also vary.
 
 
 \subsection{Scope and Limitations}
-The certification levels used here are local labels for the evidence recorded by this study. The 40 aggregate sweeps are Level~2 because ordinary sparse Ritz calculations do not independently certify eigenvalue indexing or outward-rounded residual arithmetic. The four points in Table~\ref{tab:level3-anchors} are Level~3 exact-dyadic certificates and rigorously verify the displayed continuous subintervals. Separately, the three paths in Table~\ref{tab:level3-continuations} are complete Level~3 continuations: exact anchors and strict interval overlap certify their full domains.
+All reported continuation bounds are conditional floating-point results. Ordinary sparse Ritz calculations do not establish eigenvalue indexing, and the numerical arithmetic is not enclosure arithmetic. The results should therefore be interpreted as an evaluation of the propagation strategy rather than as independently verified gap enclosures.
 
-The 40-instance cohort contains only $N=10$ and $N=12$ problems and therefore supports neither asymptotic scaling claims nor conclusions about physically large systems. The fixed-grid and adaptive counts do not provide matched guarantees, so their comparison measures workload rather than speedup. One $N=12$ run retains a width-$0.001$ unresolved interval. Finally, Perron--Frobenius irreducibility and exact endpoint enumeration already establish nondegeneracy for the retained class. This makes the cohort a controlled validation set for quantitative bound strength, coverage, and cost, not evidence that the method discovered gap positivity in a class where it was structurally unknown.
+The 60-instance cohort contains only $N=10$, $N=12$, and $N=14$ problems and therefore supports neither asymptotic scaling claims nor conclusions about physically large systems. The fixed-grid and adaptive counts do not provide matched guarantees, so their comparison measures workload rather than speedup. One $N=12$ run retains a width-$0.001$ unresolved interval. Perron--Frobenius irreducibility establishes interior ground-state uniqueness for these reduced paths, while endpoint nondegeneracy and the quantitative continuation outcomes are assessed numerically.
 
 \subsection{Integral-Based Cost Model}
 Ignoring endpoint clipping, floor overrides, and integer rounding, the implemented rule suggests the continuum approximation
 \begin{equation}
 \label{eq:integral_cost}
-N_{\mathrm{heuristic}}\approx\frac{K_{\mathrm{gap,cert}}}{\eta}
+N_{\mathrm{heuristic}}\approx\frac{K_{\mathrm{gap}}^{\mathrm{ub}}}{\eta}
 \int_0^1\frac{\dd s}{\widetilde\Delta_{+,\mathrm{lo}}(s)}.
 \end{equation}
 The implementation does not evaluate this expression from an interpolated anchor-bound curve. For the selected diagnostic run only, it substitutes a sampled floating-point Ritz-gap curve:
 \begin{equation}
-N_{\mathrm{heuristic}}\approx\frac{K_{\mathrm{gap,cert}}}{\eta}
+N_{\mathrm{heuristic}}\approx\frac{K_{\mathrm{gap}}^{\mathrm{ub}}}{\eta}
 \int_0^1\frac{\dd s}{\Delta_+(s)}.
 \end{equation}
 This is an idealized cost interpretation, not a complexity bound. It omits anchor error, floor overrides, endpoint clipping, and integer effects. Moreover, prediction and observation are not statistically independent if both are generated from the same reference gap and step rule.
 
-The regenerated data contain a computed integral only for the diagnostic $N=10$, seed-0 run: the sampled-reference trapezoidal estimate gives $56.52$, versus 57 adaptive solves. No ensemble integral analysis is reported. The single close match is illustrative rather than a validation of the model.
+The regenerated data contain a computed integral only for the diagnostic $N=10$, seed-0 run: the sampled-reference trapezoidal estimate gives $56.52$, versus 57 adaptive solves.
 
 \section{Future Research}
 
@@ -881,11 +865,11 @@ Several extensions would make the framework more useful.
     \begin{equation}
     H(s)=a(s)H_I+b(s)H_P+c(s)H_C,
     \end{equation}
-    a local certificate should use the spectral width of the relevant path increment or derivative, not its uncentered norm. Such an extension must account for varying coefficients and cannot infer catalyst effectiveness from PSD monotonicity alone.
+    a local bound should use the spectral width of the relevant path increment or derivative, not its uncentered norm. Such an extension must account for varying coefficients and cannot infer catalyst effectiveness from PSD monotonicity alone.
 
-    \item \textbf{Benchmarks without structural ground truth.} Other graph ensembles, non-stoquastic paths, 3-SAT, and Subset Sum should be used to test cases in which Perron--Frobenius positivity does not already settle nonclosing. Such a study is outside the present computational scope because every claimed indexed anchor would require interval, inertia, or exact verification in a substantially larger benchmark campaign. Structural results should still be reported separately from the quantitative tightness of propagated bounds.
+    \item \textbf{Broader benchmark classes.} Other graph ensembles, non-stoquastic paths, 3-SAT, and Subset Sum would test whether the same continuation behavior persists beyond the present stoquastic Max-Cut cohort. Structural information should continue to be reported separately from the quantitative tightness of propagated bounds.
 
-    \item \textbf{Verified and quantum-assisted anchors.} Three complete $N=10$ continuations now demonstrate that enough independently verified anchors can cover $[0,1]$, but their hundreds of anchors make the current comparison-matrix route expensive. Verified inertia or interval eigensolvers could produce stronger indexed enclosures and reduce that workload. At larger $N$, phase estimation or quantum subspace/Krylov methods \cite{Parrish2019, Stair2020} might supply anchor information, but state-preparation cost, statistical uncertainty, and eigenvalue indexing would all need explicit validation.
+    \item \textbf{Improved anchor estimation.} More robust sparse eigensolvers, block methods, and better warm starts could improve anchor quality and reduce continuation workload. At larger $N$, phase estimation or quantum subspace/Krylov methods \cite{Parrish2019, Stair2020} might supply anchor information, but state-preparation cost, statistical uncertainty, and eigenvalue indexing would need to be included in any fair assessment.
 \end{enumerate}
 
 \section{Conclusions}
@@ -895,15 +879,13 @@ For an affine Hermitian path with $D=H_P-H_I$, the relevant Weyl constant for th
 K_{\mathrm{gap}}=\lambda_{\max}(D)-\lambda_{\min}(D)
 =2\min_{c\in\mathbb R}\norm{D-cI}_2,
 \end{equation}
-not, in general, the larger comparison value $2\norm{D}_2$. Using a valid upper bound $K_{\mathrm{gap,cert}}$, the continuation theorem propagates valid anchor lower bounds over intervals classified by $B_k>0$. The schema-4 bookkeeping distinguishes proposed, floor-overridden, probe-planned, and actual endpoint-clipped lengths, treats $K_{\mathrm{gap,cert}}=0$ explicitly, and gives both an unconditional termination bound and a refined bound.
+not, in general, the larger comparison value $2\norm{D}_2$. Using a valid upper bound $K_{\mathrm{gap}}^{\mathrm{ub}}$, the continuation theorem propagates valid anchor lower bounds over intervals classified by $B_k>0$. The continuation bookkeeping distinguishes proposed, floor-overridden, probe-planned, and actual endpoint-clipped lengths, treats $K_{\mathrm{gap}}^{\mathrm{ub}}=0$ explicitly, and gives both an unconditional termination bound and a refined bound.
 
-The regenerated sparse Max-Cut sweeps remain conditional Level-2 floating-point assessments: all 20 $N=10$ runs and 19 of 20 $N=12$ runs are conditionally resolved, with one width-$0.001$ unresolved interval for $N=12$, seed 13. Perron--Frobenius irreducibility gives interior ground-state uniqueness for these reduced stoquastic paths, while exact dyadic enumeration independently confirms endpoint nondegeneracy for all 40 archived graphs. Accordingly, the aggregate continuation results quantify lower-bound conservatism and workload rather than establish a previously unknown positivity property or a speedup.
-
-Four selected seed-0 anchors have replayable Level-3 exact-dyadic records: an independent no-tolerance checker proves indexed lower bounds by comparison matrices, interlacing, and exact Rayleigh quotients. Propagating those rational bounds with the archived rational spectral-width certificates rigorously verifies four continuous subintervals. More substantially, the same exact mechanism now produces complete Level~3 continuations for $N=10$ seeds 18, 4, and 10, with 119, 186, and 195 comparison-matrix anchors, respectively, plus exact analytic endpoint information. Their interval unions strictly cover $[0,1]$. This is a finite-size demonstration, not a verified many-body minimum-gap scaling result, but it changes the paper's status from a framework for future full verification to a framework that has completed three independently replayable paths.
+The sparse Max-Cut sweeps are conditional floating-point assessments: all 20 runs at $N=10$ and $N=14$, and 19 of 20 runs at $N=12$, are conditionally resolved, with one width-$0.001$ unresolved interval for $N=12$, seed 13. Perron--Frobenius irreducibility gives interior ground-state uniqueness for these reduced stoquastic paths, while endpoint selection and all quantitative bounds are numerical. The results therefore demonstrate the finite-size behavior of the continuation method and quantify its lower-bound conservatism and workload; they do not establish a speedup or asymptotic gap scaling.
 
 \section{Accessibility of the Code and Data}
 
-The code and data are publicly available at \url{https://github.com/TiagoVerissimo/Bounding_Spectral_Gaps}. The repository includes the schema-4 continuation records and generated \path{results/section7_summary.tex}, together with selected Level-3 anchor records, the complete $N=10$ continuation manifest, independent anchor and continuation checkers, and exact-rational subinterval replay checks. Hashes and exact rational payloads make the local anchors and complete paths replayable; the accompanying scope metadata keeps the aggregate continuous sweeps at Level~2. The repository is distributed under the MIT License and its README records the reference environment plus commands for unit tests, deterministic-summary checks, read-only artifact verification, exact-anchor, subinterval, and complete-continuation verification, figure regeneration, and full numerical reproduction. A versioned archival release should be cited when one is created.
+The code and data are publicly available at \url{https://github.com/TiagoVerissimo/Bounding_Spectral_Gaps}. The repository includes the continuation implementation, numerical records, generated \path{results/section7_summary.tex}, and figures used in this paper. It is distributed under the MIT License, and the README records the reference environment and commands for tests, summary checks, figure regeneration, and numerical reproduction. A versioned archival release should be cited when one is created.
 
 
 \appendix

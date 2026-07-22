@@ -22,6 +22,7 @@ from generate_updated_comparison import (  # noqa: E402
 from main import PathOperator, certified_sweep  # noqa: E402
 from summarize_section7_results import (  # noqa: E402
     ArtifactValidationError,
+    EXPECTED_NS,
     RESULTS_PATH,
     sha256_path,
 )
@@ -35,8 +36,10 @@ def generate_grid_density_plot(
     seed: int = 0,
     delta_target: float = 0.25,
 ) -> Path:
-    if N not in (10, 12):
-        raise ValueError("the archived grid-density figures are limited to N=10,12")
+    if N not in EXPECTED_NS:
+        raise ValueError(
+            f"the archived grid-density figures are limited to N={EXPECTED_NS}"
+        )
     if delta_target <= 0.0 or not np.isfinite(delta_target):
         raise ValueError("delta_target must be finite and positive")
 
@@ -145,7 +148,7 @@ def generate_grid_density_plot(
 def main() -> int:
     try:
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        for N in (10, 12):
+        for N in EXPECTED_NS:
             generate_grid_density_plot(N, seed=0)
     except (ArtifactValidationError, OSError, ValueError) as exc:
         print(f"grid-density plot generation failed: {exc}", file=sys.stderr)
